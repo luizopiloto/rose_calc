@@ -67,13 +67,19 @@ without that mark comes from measurements players posted on the official
 forum. Nothing about the arithmetic changed; it is the same caveats the
 original text carried, moved next to the numbers they apply to.
 
-**Added: weapon requirements.** A weapon you cannot equip is worth nothing, so
-the stat it demands has to be bought before anything is optimized — a level 250
-Artisan's Launcher needs 158 STR. The optimizer always had the machinery for
-this (mandatory floors, ported from the Python), it just had no control wired
-to it. It is typed in by hand rather than looked up, because no confirmed table
-of requirements exists; inventing one would be exactly the kind of unsourced
-guess the rest of this project is careful to avoid.
+**Added: weapon status requirements.** A weapon you cannot equip is worth
+nothing, so the status it demands is bought before anything is optimized. The
+optimizer always had the machinery for this — mandatory floors, ported from the
+Python — it just had no control wired to it.
+
+Which stat a weapon asks for is fixed by the weapon and built into the weapon
+table: STR for Launcher, melee and Crossbow; DEX for Katar, Dual Wield and Bow;
+INT for Staff and Wand; CON for Gun. That mapping is the user's, reported from
+the live game, and carries the same standing as the DoT coefficients — no
+written source. *How much* it asks for rises with the weapon's grade, so the
+amount stays an input: a level 250 Artisan's Launcher needs 158 STR. No
+confirmed table of amounts exists, and inventing one would be the kind of
+unsourced guess the rest of this project is careful to avoid.
 
 The page then says which of three things happened: the requirement cost nothing
 because the goal wanted that stat anyway, or it diverted a stated number of

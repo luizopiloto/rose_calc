@@ -130,11 +130,36 @@ assert(unarmedBuild.stats.SEN === 425, 'Unarmed AP+Crit maximises Critical Ratin
 
 // -- Equipment requirements (mandatory floors) ----------------------------
 
+// Which stat each weapon's equip requirement sits on. Reported by the user
+// from the live game; only Unarmed has none.
+var EXPECTED_REQUIRES = {
+  'Unarmed': null,
+  '1H Sword/Blunt, Great Sword, Spear, Axe': 'STR',
+  'Katar': 'DEX',
+  'Dual Wield': 'DEX',
+  'Bow': 'DEX',
+  'Crossbow (Bowgun)': 'STR',
+  'Staff': 'INT',
+  'Wand': 'INT',
+  'Gun': 'CON',
+  'Launcher': 'STR'
+};
+assert(rf.WEAPONS.length === Object.keys(EXPECTED_REQUIRES).length,
+  'every weapon is accounted for in the requirement map');
+rf.WEAPONS.forEach(function (weapon) {
+  assert(weapon.requires === EXPECTED_REQUIRES[weapon.name],
+    weapon.name + ' requires ' + (EXPECTED_REQUIRES[weapon.name] || 'nothing'));
+  assert(weapon.requires === null || rf.STATS.indexOf(weapon.requires) !== -1,
+    weapon.name + ' requires a real stat');
+});
+
 // A level 250 Artisan's Launcher needs 158 STR. Under a goal that has no use
 // for STR at all, the floor is what puts the points there.
 var launcher = rf.WEAPONS_BY_NAME.Launcher;
 var budget250 = rf.totalStatPoints(250);
-var strFloor = { STR: 158 };
+var strFloor = {};
+strFloor[launcher.requires] = 158;
+assert(launcher.requires === 'STR', 'the Launcher requirement is on STR');
 
 var noFloor = rf.solve({
   objectiveName: 'Max MP', weapon: launcher, level: 250, budget: budget250, cap: 425

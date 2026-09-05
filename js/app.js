@@ -21,7 +21,6 @@
     weapon: 'Gun',
     cap: rf.DEFAULT_STAT_CAP,
     budgetAuto: true,
-    reqStat: '',
     reqValue: 0
   };
 
@@ -39,7 +38,7 @@
   };
 
   var $level, $levelSlider, $objective, $job, $weapon, $cap, $budget,
-      $budgetAuto, $reqStat, $reqValue, $announcer;
+      $budgetAuto, $reqValue, $reqStatLabel, $reqNote, $announcer;
 
   var announceTimer = null;
   var hexTween = null;
@@ -87,11 +86,6 @@
     fillSelect($job, $.map(rf.JOBS, function (j) { return j.name; }));
     fillSelect($weapon, $.map(rf.WEAPONS, function (w) { return w.name; }));
 
-    $reqStat.empty().append($('<option>').attr('value', '').text('Nothing'));
-    $.each(STAT_ORDER, function (_, stat) {
-      $reqStat.append($('<option>').attr('value', stat).text(stat));
-    });
-
     $level.attr({ min: 1, max: rf.MAX_LEVEL });
     $levelSlider.attr({ min: 1, max: rf.MAX_LEVEL });
     $cap.attr({ min: 50, max: 500 });
@@ -105,14 +99,28 @@
     $weapon.val(DEFAULTS.weapon);
     $cap.val(DEFAULTS.cap);
     $budgetAuto.prop('checked', DEFAULTS.budgetAuto);
-    $reqStat.val(DEFAULTS.reqStat);
     $reqValue.val(DEFAULTS.reqValue);
   }
 
-  /* The weapon's stat requirement, as a {stat: minimum} map for the solver,
-   * or null when no requirement is set. */
-  function readRequirement() {
-    var stat = $reqStat.val();
+  /* Which stat a weapon demands is fixed by the weapon; only how much of it
+   * is an input, since that rises with the weapon's grade. */
+  function syncRequirementControl(weapon) {
+    var stat = weapon.requires;
+    $reqStatLabel.text(stat || 'none');
+    $reqValue.prop('disabled', !stat);
+    if (!stat) $reqValue.val(0);
+    $reqNote.text(stat
+      ? 'Weapon status requirement — bought before anything else, since a ' +
+        'weapon you can’t equip is worth nothing. The amount rises with the ' +
+        'weapon’s grade, so type in the one you’re aiming for. A level 250 ' +
+        'Artisan’s Launcher needs 158 STR.'
+      : 'No weapon, so there’s no status requirement to meet.');
+  }
+
+  /* The requirement as a {stat: minimum} map for the solver, or null when
+   * there is nothing to meet. */
+  function readRequirement(weapon) {
+    var stat = weapon.requires;
     if (!stat) return null;
     var value = readNumber($reqValue, 0, 500, 0);
     if (value <= rf.BASE_STATS[stat]) return null;   // already met at creation
@@ -497,7 +505,9 @@
     var earned = rf.totalStatPoints(level);
     if ($budgetAuto.is(':checked')) $budget.val(earned);
     var budget = readNumber($budget, 0, 200000, earned);
-    var floors = readRequirement();
+
+    syncRequirementControl(weapon);
+    var floors = readRequirement(weapon);
 
     var params = {
       objectiveName: objective.name,
@@ -554,8 +564,9 @@
     $cap = $('#cap');
     $budget = $('#budget');
     $budgetAuto = $('#budgetAuto');
-    $reqStat = $('#reqStat');
     $reqValue = $('#reqValue');
+    $reqStatLabel = $('#reqStatLabel');
+    $reqNote = $('#reqNote');
     $announcer = $('#announcer');
 
     buildControls();
@@ -575,14 +586,15 @@
       recalculate();
     });
 
-    $objective.add($job).add($weapon).on('change', recalculate);
+    $objective.add($job).on('change', recalculate);
 
-    $reqStat.on('change', function () {
-      var none = !$(this).val();
-      $reqValue.prop('disabled', none);
-      if (none) $reqValue.val(0);
+    $weapon.on('change', function () {
+      // The requirement belongs to the weapon. An amount typed for the last
+      // one would otherwise carry over silently onto a different stat.
+      $reqValue.val(0);
       recalculate();
     });
+
     $reqValue.on('input change', recalculate);
     $reqValue.on('blur', function () { $(this).val(readNumber($reqValue, 0, 500, 0)); });
 
@@ -597,7 +609,6 @@
     $('#reset').on('click', function () {
       applyDefaults();
       $budget.prop('disabled', true);
-      $reqValue.prop('disabled', true);
       syncSliderFill();
       recalculate();
     });

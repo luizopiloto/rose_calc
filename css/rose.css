@@ -205,6 +205,10 @@ abbr { text-decoration: none; }
 
 .field-head .field-label { margin-bottom: 0; }
 
+/* The stat a weapon demands is derived from the weapon, so it reads as a
+   value inside the label rather than as something to choose. */
+.field-label-stat { color: var(--rose-deep); }
+
 .field-note {
   margin: 7px 0 0;
   font-size: var(--t-xs);
@@ -227,11 +231,6 @@ abbr { text-decoration: none; }
 
 .field-select { width: 100%; display: block; }
 
-/* Stat picker and amount share a row. The select must be allowed to shrink,
-   so its width:100% above is overridden rather than fought with. */
-.field-pair { display: flex; gap: 8px; align-items: stretch; }
-.field-pair .field-select { width: auto; flex: 1 1 auto; min-width: 0; }
-.field-pair .field-number { flex: 0 0 5.2rem; width: 5.2rem; }
 
 .field-number { width: 5.6rem; text-align: right; font-weight: 600; }
 .field-number:disabled { background: var(--parchment-dim); color: var(--ink-soft); }

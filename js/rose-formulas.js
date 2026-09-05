@@ -144,17 +144,22 @@
   // Weapons and Attack Power
   // --------------------------------------------------------------------
 
+  // `requires` is the stat a weapon's equip requirement sits on. Reported by
+  // the user from the live game, not found in a written source -- the same
+  // standing as the DoT coefficients below. Only the stat is fixed: how much
+  // of it a given weapon needs rises with the weapon, so the amount is an
+  // input rather than a table (a level 250 Artisan's Launcher needs 158 STR).
   var WEAPONS = [
-    { name: 'Unarmed', kind: 'none' },
-    { name: '1H Sword/Blunt, Great Sword, Spear, Axe', kind: 'melee' },
-    { name: 'Katar', kind: 'katar' },
-    { name: 'Dual Wield', kind: 'dualwield' },
-    { name: 'Bow', kind: 'bow' },
-    { name: 'Crossbow (Bowgun)', kind: 'crossbow' },
-    { name: 'Staff', kind: 'staff' },
-    { name: 'Wand', kind: 'wand' },
-    { name: 'Gun', kind: 'gun' },
-    { name: 'Launcher', kind: 'launcher' }
+    { name: 'Unarmed', kind: 'none', requires: null },
+    { name: '1H Sword/Blunt, Great Sword, Spear, Axe', kind: 'melee', requires: 'STR' },
+    { name: 'Katar', kind: 'katar', requires: 'DEX' },
+    { name: 'Dual Wield', kind: 'dualwield', requires: 'DEX' },
+    { name: 'Bow', kind: 'bow', requires: 'DEX' },
+    { name: 'Crossbow (Bowgun)', kind: 'crossbow', requires: 'STR' },
+    { name: 'Staff', kind: 'staff', requires: 'INT' },
+    { name: 'Wand', kind: 'wand', requires: 'INT' },
+    { name: 'Gun', kind: 'gun', requires: 'CON' },
+    { name: 'Launcher', kind: 'launcher', requires: 'STR' }
   ];
 
   var WEAPONS_BY_NAME = {};
