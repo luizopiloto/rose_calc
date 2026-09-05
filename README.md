@@ -73,19 +73,6 @@ creation values, which come from older server reconstructions.
 The goal weights are priorities, not measurements. Nothing about them comes
 from the game.
 
-## Deployment
-
-Static files served straight from `main` — no Actions workflow. `.nojekyll` is
-committed because nothing here needs Jekyll.
-
-The site's address appears in exactly three places, all in the `<head>` of
-`index.html`: the `canonical` link and the `og:url` and `og:image` tags. Every
-other path is relative, so moving the site — a rename, a user site, a custom
-domain — means editing those three and nothing else.
-
-`assets/og.png` is rendered by hand from a throwaway HTML file in the page's own
-palette and typefaces. Regenerate it if the title or artwork changes.
-
 ## Licence
 
 MIT — see [`LICENSE`](LICENSE). Two things it does not cover, both detailed in
