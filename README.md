@@ -38,11 +38,16 @@ overspends:
 node js/self-check.js
 ```
 
-The port was also checked directly against the Python: both implementations
+The port was also checked directly against the Python. Both implementations
 were run over the full cross-product of 12 objectives × 10 weapons ×
 11 levels × 4 stat caps (5,280 builds), comparing the stat spread, SP spent,
-SP left over, which stats hit the cap, and every derived stat. All 5,280
-agree exactly.
+SP left over, which stats hit the cap, and every derived stat — all 5,280
+agree exactly. A second sweep added weapon requirements (6,700 builds, 4,400
+of them with a requirement that actually cost points) and also agrees exactly.
+
+One path has no Python counterpart: `rose_formulas.py`'s
+`optimize_ap_plus_critical` takes no floors argument, so requirements on that
+one objective are covered by `js/self-check.js` rather than by comparison.
 
 ## What changed from the PySide6 version
 
@@ -61,6 +66,20 @@ and explains itself on hover — Max HP, Max MP and DoT damage. Everything
 without that mark comes from measurements players posted on the official
 forum. Nothing about the arithmetic changed; it is the same caveats the
 original text carried, moved next to the numbers they apply to.
+
+**Added: weapon requirements.** A weapon you cannot equip is worth nothing, so
+the stat it demands has to be bought before anything is optimized — a level 250
+Artisan's Launcher needs 158 STR. The optimizer always had the machinery for
+this (mandatory floors, ported from the Python), it just had no control wired
+to it. It is typed in by hand rather than looked up, because no confirmed table
+of requirements exists; inventing one would be exactly the kind of unsourced
+guess the rest of this project is careful to avoid.
+
+The page then says which of three things happened: the requirement cost nothing
+because the goal wanted that stat anyway, or it diverted a stated number of
+points away from the goal, or the budget could not reach it at all and the build
+cannot hold the weapon. Working out which takes a second solve without the
+requirement, for comparison.
 
 **Added: a level slider, and a hexagon.** The six stats are drawn against
 the stat cap and re-shape as inputs change. Optimal builds turn out to be

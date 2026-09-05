@@ -20,7 +20,9 @@
     job: 'Artisan',
     weapon: 'Gun',
     cap: rf.DEFAULT_STAT_CAP,
-    budgetAuto: true
+    budgetAuto: true,
+    reqStat: '',
+    reqValue: 0
   };
 
   // Why a figure carries the dotted underline. Keyed by what it describes.
@@ -37,7 +39,7 @@
   };
 
   var $level, $levelSlider, $objective, $job, $weapon, $cap, $budget,
-      $budgetAuto, $announcer;
+      $budgetAuto, $reqStat, $reqValue, $announcer;
 
   var announceTimer = null;
   var hexTween = null;
@@ -85,6 +87,11 @@
     fillSelect($job, $.map(rf.JOBS, function (j) { return j.name; }));
     fillSelect($weapon, $.map(rf.WEAPONS, function (w) { return w.name; }));
 
+    $reqStat.empty().append($('<option>').attr('value', '').text('Nothing'));
+    $.each(STAT_ORDER, function (_, stat) {
+      $reqStat.append($('<option>').attr('value', stat).text(stat));
+    });
+
     $level.attr({ min: 1, max: rf.MAX_LEVEL });
     $levelSlider.attr({ min: 1, max: rf.MAX_LEVEL });
     $cap.attr({ min: 50, max: 500 });
@@ -98,6 +105,20 @@
     $weapon.val(DEFAULTS.weapon);
     $cap.val(DEFAULTS.cap);
     $budgetAuto.prop('checked', DEFAULTS.budgetAuto);
+    $reqStat.val(DEFAULTS.reqStat);
+    $reqValue.val(DEFAULTS.reqValue);
+  }
+
+  /* The weapon's stat requirement, as a {stat: minimum} map for the solver,
+   * or null when no requirement is set. */
+  function readRequirement() {
+    var stat = $reqStat.val();
+    if (!stat) return null;
+    var value = readNumber($reqValue, 0, 500, 0);
+    if (value <= rf.BASE_STATS[stat]) return null;   // already met at creation
+    var floors = {};
+    floors[stat] = value;
+    return floors;
   }
 
   // --------------------------------------------------------------------
@@ -226,8 +247,9 @@
     $('.ledger-split-item-rest').toggleClass('is-stranded', build.leftover > 0);
   }
 
-  function renderAllocation(build, cap) {
+  function renderAllocation(build, cap, requirement) {
     var rows = $.map(STAT_ORDER, function (stat) {
+      var required = requirement && requirement.stat === stat ? requirement.needed : 0;
       var base = rf.BASE_STATS[stat];
       var final = build.stats[stat];
       var gain = final - base;
@@ -245,6 +267,7 @@
         '<span class="alloc-values">' + base + ' &rarr; ' +
           '<span class="alloc-final">' + final + '</span>' +
           (gain ? ' <span class="alloc-gain">(+' + fmt(gain) + ')</span>' : '') +
+          (required ? ' <span class="alloc-req-note">needs ' + fmt(required) + '</span>' : '') +
           (capped ? ' <span class="alloc-cap-note">at cap</span>' : '') +
         '</span>' +
         '<span class="alloc-track">' +
@@ -357,8 +380,44 @@
     $('#worth').html(html);
   }
 
-  function renderNotes(build, objective, weapon, level, cap) {
+  function renderNotes(build, objective, weapon, level, cap, requirement) {
     var notes = [];
+
+    // The weapon requirement comes first: if it was not met, nothing else on
+    // the page describes a build this character could actually equip.
+    if (requirement) {
+      var stat = requirement.stat;
+      var needed = requirement.needed;
+
+      if (needed > cap) {
+        notes.push({
+          warn: true,
+          text: 'The weapon needs ' + fmt(needed) + ' ' + stat + ', above the stat cap of ' + fmt(cap) +
+            '. Base points alone cannot get there — on the live server a class passive or gear would ' +
+            'have to cover the difference, and this calculator models neither.'
+        });
+      } else if (requirement.reached < needed) {
+        notes.push({
+          warn: true,
+          text: 'This build cannot equip the weapon. It needs ' + fmt(needed) + ' ' + stat +
+            ' and only reaches ' + fmt(requirement.reached) + ': the budget of ' + fmt(build.budget) +
+            ' runs out first. Everything below describes a weapon this character cannot hold.'
+        });
+      } else if (requirement.unrestricted >= needed) {
+        notes.push({
+          text: 'The ' + fmt(needed) + ' ' + stat + ' the weapon needs costs this build nothing — ' +
+            objective.name + ' buys ' + stat + ' up to ' + fmt(requirement.unrestricted) +
+            ' on its own merits anyway.'
+        });
+      } else {
+        notes.push({
+          text: 'Meeting the requirement raised ' + stat + ' from the ' + fmt(requirement.unrestricted) +
+            ' this goal would have chosen to the ' + fmt(needed) + ' the weapon needs, which costs ' +
+            fmt(rf.costBetween(requirement.unrestricted, needed)) + ' points. Those went to being able ' +
+            'to hold the weapon rather than to ' + objective.name + '.'
+        });
+      }
+    }
 
     if (build.leftover > 0) {
       notes.push({
@@ -438,15 +497,31 @@
     var earned = rf.totalStatPoints(level);
     if ($budgetAuto.is(':checked')) $budget.val(earned);
     var budget = readNumber($budget, 0, 200000, earned);
+    var floors = readRequirement();
 
-    var solved = rf.solve({
+    var params = {
       objectiveName: objective.name,
       weapon: weapon,
       level: level,
       budget: budget,
       cap: cap
-    });
+    };
+    var solved = rf.solve($.extend({ floors: floors }, params));
     var build = solved.build;
+
+    // Solving again without the requirement says whether it changed anything:
+    // a goal that already wants that stat pays nothing for it. A second solve
+    // is a couple of milliseconds, cheap enough to do on every keystroke.
+    var requirement = null;
+    if (floors) {
+      var reqStat = Object.keys(floors)[0];
+      requirement = {
+        stat: reqStat,
+        needed: floors[reqStat],
+        reached: build.stats[reqStat],
+        unrestricted: rf.solve(params).build.stats[reqStat]
+      };
+    }
 
     $('#sheetObjective').text(objective.name);
     $('#sheetCharacter').text('Level ' + level + ' ' + job.name + ' with ' +
@@ -455,10 +530,10 @@
 
     renderLedger(build, level, earned);
     drawHexagon(build.stats, cap);
-    renderAllocation(build, cap);
+    renderAllocation(build, cap, requirement);
     renderResults(build, job, weapon, level);
     renderWorth(build, solved.coefficients, objective, weapon);
-    renderNotes(build, objective, weapon, level, cap);
+    renderNotes(build, objective, weapon, level, cap, requirement);
     announce(build, objective, job, weapon, level);
   }
 
@@ -479,6 +554,8 @@
     $cap = $('#cap');
     $budget = $('#budget');
     $budgetAuto = $('#budgetAuto');
+    $reqStat = $('#reqStat');
+    $reqValue = $('#reqValue');
     $announcer = $('#announcer');
 
     buildControls();
@@ -499,6 +576,16 @@
     });
 
     $objective.add($job).add($weapon).on('change', recalculate);
+
+    $reqStat.on('change', function () {
+      var none = !$(this).val();
+      $reqValue.prop('disabled', none);
+      if (none) $reqValue.val(0);
+      recalculate();
+    });
+    $reqValue.on('input change', recalculate);
+    $reqValue.on('blur', function () { $(this).val(readNumber($reqValue, 0, 500, 0)); });
+
     $cap.on('input change', recalculate);
     $budget.on('input change', recalculate);
 
@@ -510,6 +597,7 @@
     $('#reset').on('click', function () {
       applyDefaults();
       $budget.prop('disabled', true);
+      $reqValue.prop('disabled', true);
       syncSliderFill();
       recalculate();
     });

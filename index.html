@@ -74,6 +74,19 @@
         <select class="field-select" id="weapon"></select>
       </div>
 
+      <div class="field">
+        <label class="field-label" for="reqStat">Weapon needs</label>
+        <div class="field-pair">
+          <select class="field-select" id="reqStat"></select>
+          <input class="field-number" type="number" id="reqValue" min="0" max="500" step="1" value="0" disabled>
+        </div>
+        <p class="field-note">
+          A weapon you can’t equip is worth nothing, so this is bought before
+          anything else. A level 250 Artisan’s Launcher needs 158 STR. Type it
+          in — there’s no confirmed table of requirements to read it from.
+        </p>
+      </div>
+
       <hr class="character-rule">
 
       <div class="field">

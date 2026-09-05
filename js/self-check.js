@@ -128,6 +128,78 @@ var unarmed = rf.WEAPONS_BY_NAME.Unarmed;
 var unarmedBuild = rf.optimizeApPlusCritical(unarmed, 250, rf.totalStatPoints(250), { cap: 425 });
 assert(unarmedBuild.stats.SEN === 425, 'Unarmed AP+Crit maximises Critical Rating');
 
+// -- Equipment requirements (mandatory floors) ----------------------------
+
+// A level 250 Artisan's Launcher needs 158 STR. Under a goal that has no use
+// for STR at all, the floor is what puts the points there.
+var launcher = rf.WEAPONS_BY_NAME.Launcher;
+var budget250 = rf.totalStatPoints(250);
+var strFloor = { STR: 158 };
+
+var noFloor = rf.solve({
+  objectiveName: 'Max MP', weapon: launcher, level: 250, budget: budget250, cap: 425
+});
+assert(noFloor.build.stats.STR === rf.BASE_STATS.STR, 'Max MP buys no STR on its own');
+
+var withFloor = rf.solve({
+  objectiveName: 'Max MP', weapon: launcher, level: 250, budget: budget250, cap: 425, floors: strFloor
+});
+assert(withFloor.build.stats.STR === 158, 'the floor puts STR at exactly the requirement');
+assert(withFloor.build.floorsCost === rf.costBetween(rf.BASE_STATS.STR, 158),
+  'floorsCost is the cost of getting STR from its base to the requirement');
+assert(withFloor.build.floorsCost === 2403, 'reaching 158 STR from 15 costs 2403 points');
+assert(withFloor.build.spent <= budget250, 'the floor does not push the build over budget');
+
+// Max MP caps INT at 425 and still leaves thousands of points unspendable, so
+// here the requirement is paid for out of slack and the goal loses nothing.
+assert(withFloor.build.stats.INT === noFloor.build.stats.INT,
+  'with budget to spare, the requirement costs the goal nothing');
+assert(withFloor.build.leftover === noFloor.build.leftover - 2403,
+  'it comes out of the unspent remainder instead');
+
+// When the goal can absorb the whole budget, it does cost. Gun Attack Power
+// (CON/DEX/SEN) has no use for STR at all, so a STR requirement is pure loss.
+var apNoFloor = rf.solve({
+  objectiveName: 'Attack Power', weapon: gun, level: 250, budget: budget250, cap: 425
+});
+var apFloored = rf.solve({
+  objectiveName: 'Attack Power', weapon: gun, level: 250, budget: budget250, cap: 425, floors: strFloor
+});
+assert(apFloored.build.stats.STR === 158, 'the floor is met under Attack Power too');
+assert(rf.attackPower(apFloored.build.stats, gun) < rf.attackPower(apNoFloor.build.stats, gun),
+  'and there it really does cost the goal Attack Power');
+
+// A floor already satisfied at character creation changes nothing.
+var trivial = rf.solve({
+  objectiveName: 'Max MP', weapon: launcher, level: 250, budget: budget250, cap: 425, floors: { STR: 10 }
+});
+assert(trivial.build.floorsCost === 0, 'a floor below the creation value costs nothing');
+assert(trivial.build.stats.INT === noFloor.build.stats.INT, 'and leaves the build untouched');
+
+// A floor above the stat cap is clamped to the cap, not chased past it.
+var overCap = rf.solve({
+  objectiveName: 'Max MP', weapon: launcher, level: 250, budget: budget250, cap: 200, floors: { STR: 300 }
+});
+assert(overCap.build.stats.STR === 200, 'a floor above the cap stops at the cap');
+
+// An unaffordable floor fills as far as the budget allows and stops, rather
+// than overspending -- the UI reports this as a build that cannot equip.
+var broke = rf.solve({
+  objectiveName: 'Max MP', weapon: launcher, level: 12, budget: rf.totalStatPoints(12), cap: 425, floors: { STR: 400 }
+});
+assert(broke.build.stats.STR < 400, 'an unaffordable floor is left unmet');
+assert(broke.build.spent <= rf.totalStatPoints(12), 'and never overspends the budget');
+
+// "Attack Power + Critical" must apply the floor to its pure-AP baseline too,
+// or the AP target it measures itself against would be unreachable.
+var comboFloored = rf.optimizeApPlusCritical(launcher, 250, budget250, { cap: 425, floors: strFloor });
+assert(comboFloored.stats.STR >= 158, 'the combined objective still meets the requirement');
+assert(
+  rf.attackPower(comboFloored.stats, launcher) >=
+    comboFloored.apPriorityInfo.apMax * rf.AP_CRITICAL_MIN_AP_FRACTION,
+  'and its Attack Power guarantee still holds against a floored baseline'
+);
+
 // -- The optimizer never overspends, whatever the inputs ------------------
 
 rf.OBJECTIVES.forEach(function (objective) {

@@ -227,6 +227,12 @@ abbr { text-decoration: none; }
 
 .field-select { width: 100%; display: block; }
 
+/* Stat picker and amount share a row. The select must be allowed to shrink,
+   so its width:100% above is overridden rather than fought with. */
+.field-pair { display: flex; gap: 8px; align-items: stretch; }
+.field-pair .field-select { width: auto; flex: 1 1 auto; min-width: 0; }
+.field-pair .field-number { flex: 0 0 5.2rem; width: 5.2rem; }
+
 .field-number { width: 5.6rem; text-align: right; font-weight: 600; }
 .field-number:disabled { background: var(--parchment-dim); color: var(--ink-soft); }
 
@@ -462,6 +468,7 @@ abbr { text-decoration: none; }
 
 .alloc-gain { margin-left: 3px; }
 .alloc-cap-note { font-size: var(--t-xs); color: var(--sun); margin-left: 4px; }
+.alloc-req-note { font-size: var(--t-xs); color: var(--sky); margin-left: 4px; }
 
 @media (max-width: 560px) {
   .alloc-row {

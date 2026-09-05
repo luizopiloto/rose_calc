@@ -493,6 +493,15 @@
     var cap = options.cap === undefined ? DEFAULT_STAT_CAP : options.cap;
     var minApFraction = options.minApFraction === undefined
       ? AP_CRITICAL_MIN_AP_FRACTION : options.minApFraction;
+    // Equipment requirements are mandatory, so they bind the pure-AP baseline
+    // too. Leaving them off it would make apMax a target this build could
+    // never reach and turn the floor below into an impossible bar.
+    //
+    // This parameter goes beyond rose_formulas.py, whose
+    // optimize_ap_plus_critical takes no floors -- so it is the one path the
+    // Python cannot be compared against. optimize() itself does take floors
+    // there, and that is checked (see README).
+    var floors = options.floors || null;
 
     var apCoefficients = attackPowerCoefficients(weapon);
     var senApValue = apCoefficients.SEN || 0;
@@ -501,14 +510,14 @@
     // which only ever applies pre-cap.
     var tapers = { SEN: { threshold: criticalRatingForChanceCap(level), after: senApValue } };
 
-    var pureApBuild = optimize(apCoefficients, budget, { cap: cap });
+    var pureApBuild = optimize(apCoefficients, budget, { cap: cap, floors: floors });
     var apMax = attackPower(pureApBuild.stats, weapon);
     var apFloor = apMax * minApFraction;
 
     function buildForBonus(bonus) {
       var coefficients = attackPowerCoefficients(weapon);
       coefficients.SEN = senApValue + bonus;
-      return optimize(coefficients, budget, { cap: cap, tapers: tapers });
+      return optimize(coefficients, budget, { cap: cap, tapers: tapers, floors: floors });
     }
 
     function meetsFloor(bonus) {
@@ -536,23 +545,29 @@
   }
 
   /* One call for the whole calculation, so the UI never has to know which
-   * objectives are linear and which aren't. */
+   * objectives are linear and which aren't.
+   *
+   * params.floors is an optional {stat: minimum} map for equipment the build
+   * has to be able to equip -- a weapon that cannot be held is worth nothing,
+   * so those points are bought before anything is optimized.
+   */
   function solve(params) {
     var weapon = params.weapon;
     var level = params.level;
     var budget = params.budget;
     var cap = params.cap;
+    var floors = params.floors || null;
 
     if (params.objectiveName === 'Attack Power + Critical') {
       return {
-        build: optimizeApPlusCritical(weapon, level, budget, { cap: cap }),
+        build: optimizeApPlusCritical(weapon, level, budget, { cap: cap, floors: floors }),
         coefficients: {}
       };
     }
     var coefficients = objectiveCoefficients(params.objectiveName, weapon);
     var tapers = objectiveTapers(params.objectiveName, weapon, level);
     return {
-      build: optimize(coefficients, budget, { cap: cap, tapers: tapers }),
+      build: optimize(coefficients, budget, { cap: cap, tapers: tapers, floors: floors }),
       coefficients: coefficients
     };
   }
