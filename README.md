@@ -78,7 +78,7 @@ from the game.
 MIT — see [`LICENSE`](LICENSE). Two things it does not cover, both detailed in
 [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md):
 
-- **The artwork.** The mole logo, favicon and preview card are original drawings
+- **The artwork.** The moldie logo, favicon and preview card are original drawings
   after a ROSE Online monster, held back from the MIT grant. Fork the code
   freely, but swap the branding.
 - **The bundled library and fonts.** jQuery is MIT; Fredoka and Barlow are under
