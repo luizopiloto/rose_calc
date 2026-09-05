@@ -111,9 +111,7 @@
     if (!stat) $reqValue.val(0);
     $reqNote.text(stat
       ? 'Weapon status requirement — bought before anything else, since a ' +
-        'weapon you can’t equip is worth nothing. The amount rises with the ' +
-        'weapon’s grade, so type in the one you’re aiming for. A level 250 ' +
-        'Artisan’s Launcher needs 158 STR.'
+        'weapon you can’t equip is worth nothing.'
       : 'No weapon, so there’s no status requirement to meet.');
   }
 
