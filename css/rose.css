@@ -574,6 +574,7 @@ abbr { text-decoration: none; }
 }
 .colophon p { margin: 0 0 10px; font-size: var(--t-sm); line-height: 1.6; color: var(--on-void-faint); }
 .colophon p:last-child { margin-bottom: 0; }
+.colophon .colophon-legal { margin-top: 18px; }
 
 /* ---------------------------------------------------------------------- */
 
