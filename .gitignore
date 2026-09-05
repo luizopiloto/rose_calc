@@ -1,0 +1,9 @@
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+*~
+.idea/
+.vscode/
+
+# Local render harness used when checking layouts
+_probe.html

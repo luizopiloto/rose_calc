@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ROSE Online base status optimizer</title>
+<meta name="description" content="Works out where a ROSE Online character's base stat points should go for a given level, class, weapon and goal. Base status only, no gear or passives.">
+<link rel="icon" href="assets/favicon.png">
+<link rel="canonical" href="https://luizopiloto.github.io/rose_calc/">
+
+<!-- Link previews. These are the only absolute URLs in the project; if the
+     site moves, they and the canonical link above are what need updating. -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://luizopiloto.github.io/rose_calc/">
+<meta property="og:title" content="ROSE Online base status optimizer">
+<meta property="og:description" content="Where every stat point should go, for any level, class and weapon. Base status only — no gear, no passives.">
+<meta property="og:image" content="https://luizopiloto.github.io/rose_calc/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Base status optimizer, beside the ROSE Online mole in an orange vest.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="css/fonts.css">
+<link rel="stylesheet" href="css/rose.css">
+</head>
+<body>
+
+<a class="skip-link" href="#build">Skip to the build</a>
+
+<div class="shell">
+
+  <header class="masthead">
+    <img class="masthead-logo" src="assets/logo.webp" width="360" height="376" alt="">
+    <div class="masthead-text">
+      <p class="masthead-game">ROSE Online</p>
+      <h1 class="masthead-title">Base status optimizer</h1>
+      <p class="masthead-blurb">
+        Stat points get more expensive the higher a stat goes, so the best spread is
+        rarely the obvious one. Pick a character and a goal, and this works out where
+        every point should land.
+      </p>
+    </div>
+  </header>
+
+  <main class="layout">
+
+    <!-- ---------------------------------------------------------------- -->
+    <!-- Character panel                                                   -->
+    <!-- ---------------------------------------------------------------- -->
+    <form class="character" id="character" autocomplete="off">
+      <h2 class="character-title">Character</h2>
+
+      <div class="field">
+        <div class="field-head">
+          <label class="field-label" for="level">Level</label>
+          <input class="field-number" type="number" id="level" min="1" max="250" step="1" value="250">
+        </div>
+        <input class="field-slider" type="range" id="levelSlider" min="1" max="250" step="1" value="250"
+               aria-label="Level slider">
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="objective">Building for</label>
+        <select class="field-select" id="objective"></select>
+        <p class="field-note" id="objectiveNote"></p>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="job">Class</label>
+        <select class="field-select" id="job"></select>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="weapon">Weapon</label>
+        <select class="field-select" id="weapon"></select>
+      </div>
+
+      <hr class="character-rule">
+
+      <div class="field">
+        <div class="field-head">
+          <label class="field-label" for="cap">Stat cap</label>
+          <input class="field-number" type="number" id="cap" min="50" max="500" step="1" value="425">
+        </div>
+        <p class="field-note">
+          The most a single base stat can reach. 425 on the live server; class
+          passives can push a main stat past it, which this ignores.
+        </p>
+      </div>
+
+      <div class="field">
+        <div class="field-head">
+          <label class="field-label" for="budget">Stat points</label>
+          <input class="field-number" type="number" id="budget" min="0" max="200000" step="1" value="27490" disabled>
+        </div>
+        <label class="field-check">
+          <input type="checkbox" id="budgetAuto" checked>
+          <span>Use what this level has earned</span>
+        </label>
+      </div>
+
+      <button class="character-reset" type="button" id="reset">Reset to defaults</button>
+    </form>
+
+    <!-- ---------------------------------------------------------------- -->
+    <!-- Build sheet                                                       -->
+    <!-- ---------------------------------------------------------------- -->
+    <section class="sheet" id="build">
+
+      <div class="sheet-head">
+        <h2 class="sheet-objective" id="sheetObjective">Attack Power</h2>
+        <p class="sheet-character" id="sheetCharacter">Level 250 Artisan with a Gun</p>
+      </div>
+
+      <!-- Hero: the shape of the build, and the ledger that paid for it -->
+      <div class="hero">
+        <figure class="hexagon">
+          <svg id="hexagon" viewBox="0 0 320 300" role="img" aria-labelledby="hexagonTitle">
+            <title id="hexagonTitle">The six base stats, drawn against the stat cap</title>
+            <g class="hexagon-rings" id="hexRings"></g>
+            <g class="hexagon-spokes" id="hexSpokes"></g>
+            <polygon class="hexagon-shape" id="hexShape" points=""></polygon>
+            <g class="hexagon-labels" id="hexLabels"></g>
+          </svg>
+          <figcaption class="hexagon-caption">Each corner runs from 0 to the stat cap.</figcaption>
+        </figure>
+
+        <div class="ledger">
+          <p class="ledger-total" id="ledgerTotal">27,490</p>
+          <p class="ledger-total-label" id="ledgerTotalLabel">stat points earned by level 250</p>
+          <div class="ledger-bar">
+            <span class="ledger-bar-fill" id="ledgerBarFill"></span>
+          </div>
+          <dl class="ledger-split">
+            <div class="ledger-split-item">
+              <dt>Allocated</dt>
+              <dd id="ledgerSpent">27,488</dd>
+            </div>
+            <div class="ledger-split-item ledger-split-item-rest">
+              <dt>Left over</dt>
+              <dd id="ledgerLeft">2</dd>
+            </div>
+          </dl>
+          <p class="ledger-worth" id="ledgerWorth"></p>
+        </div>
+      </div>
+
+      <!-- Allocation -->
+      <h3 class="section-title">Where the points go</h3>
+      <p class="section-lede">
+        Bar length is the share of the budget each stat consumed, not the stat’s size —
+        the last points of a tall stat cost many times what the first ones did.
+      </p>
+      <ol class="alloc" id="alloc"></ol>
+
+      <!-- Resulting stats -->
+      <h3 class="section-title">What this build gets you</h3>
+      <p class="section-lede">Base status only. No armour, no passives, no buffs.</p>
+      <dl class="results" id="results"></dl>
+
+      <!-- Value per point -->
+      <h3 class="section-title" id="worthTitle">How much each point is worth</h3>
+      <div id="worth"></div>
+
+      <!-- Notes -->
+      <h3 class="section-title">Worth knowing</h3>
+      <ul class="notes" id="notes"></ul>
+
+    </section>
+  </main>
+
+  <footer class="colophon">
+    <p>
+      Figures with a <abbr class="provisional" title="Hover any dotted value to see what is and isn’t known about it.">dotted underline</abbr>
+      have not been confirmed on the live server. Everything else comes from
+      measurements players posted on the official forum.
+    </p>
+    <p>
+      A weapon’s own attack rating and ammo quality are not inputs: the confirmed
+      Attack Power formula for this server is flat per stat point and doesn’t
+      scale with them.
+    </p>
+  </footer>
+
+</div>
+
+<p class="visually-hidden" role="status" aria-live="polite" id="announcer"></p>
+
+<script src="vendor/jquery-3.7.1.min.js"></script>
+<script src="js/rose-formulas.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
