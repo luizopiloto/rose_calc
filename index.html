@@ -58,11 +58,11 @@
                aria-label="Level slider">
       </div>
 
-      <div class="field">
-        <label class="field-label" for="objective">Building for</label>
-        <select class="field-select" id="objective"></select>
-        <p class="field-note" id="objectiveNote"></p>
-      </div>
+      <fieldset class="field goals-field">
+        <legend class="field-label">Building for</legend>
+        <div class="goals" id="goals"></div>
+        <p class="field-note" id="goalsNote"></p>
+      </fieldset>
 
       <div class="field">
         <label class="field-label" for="job">Class</label>
@@ -121,6 +121,12 @@
         <p class="sheet-character" id="sheetCharacter">Level 250 Artisan with a Gun</p>
       </div>
 
+      <p class="sheet-empty" id="sheetEmpty" hidden>
+        Pick a goal on the left and this fills in with the spread that best serves it.
+      </p>
+
+      <div id="sheetBody">
+
       <!-- Hero: the shape of the build, and the ledger that paid for it -->
       <div class="hero">
         <figure class="hexagon">
@@ -167,6 +173,17 @@
       <p class="section-lede">Base status only. No armour, no passives, no buffs.</p>
       <dl class="results" id="results"></dl>
 
+      <!-- How several goals traded off against each other -->
+      <div id="tradeoffSection" hidden>
+        <h3 class="section-title">How the goals traded off</h3>
+        <p class="section-lede">
+          Each goal against what it could have reached on its own with the same points.
+          Goals are balanced by that fraction, not by their raw numbers, which are on
+          wildly different scales.
+        </p>
+        <ul class="scores" id="scores"></ul>
+      </div>
+
       <!-- Value per point -->
       <h3 class="section-title" id="worthTitle">How much each point is worth</h3>
       <div id="worth"></div>
@@ -175,6 +192,7 @@
       <h3 class="section-title">Worth knowing</h3>
       <ul class="notes" id="notes"></ul>
 
+      </div><!-- /sheetBody -->
     </section>
   </main>
 

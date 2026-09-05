@@ -4,9 +4,9 @@
  * controls to it and renders the result, the same division the original
  * PySide6 app kept between rose_formulas.py and main_form.py.
  *
- * Recalculation is synchronous on every input change: a full solve is a
- * few milliseconds even for the objective that binary-searches, so there
- * is no debounce and no "calculate" button to press.
+ * Recalculation is synchronous on every input change: a full solve is a few
+ * milliseconds even with three goals, each of which needs a solo pass first,
+ * so there is no debounce and no "calculate" button to press.
  */
 
 (function ($, rf) {
@@ -16,7 +16,7 @@
 
   var DEFAULTS = {
     level: rf.MAX_LEVEL,
-    objective: 'Attack Power',
+    goals: ['Attack Power'],
     job: 'Artisan',
     weapon: 'Gun',
     cap: rf.DEFAULT_STAT_CAP,
@@ -37,7 +37,7 @@
          'but has never put a number on it.'
   };
 
-  var $level, $levelSlider, $objective, $job, $weapon, $cap, $budget,
+  var $level, $levelSlider, $goals, $goalsNote, $job, $weapon, $cap, $budget,
       $budgetAuto, $reqValue, $reqStatLabel, $reqNote, $announcer;
 
   var announceTimer = null;
@@ -82,7 +82,15 @@
   }
 
   function buildControls() {
-    fillSelect($objective, $.map(rf.OBJECTIVES, function (o) { return o.name; }));
+    $goals.empty();
+    $.each(rf.OBJECTIVES, function (_, goal) {
+      $goals.append(
+        $('<label class="goal">').append(
+          $('<input type="checkbox" class="goal-check">').val(goal.name),
+          $('<span class="goal-name">').text(goal.name)
+        )
+      );
+    });
     fillSelect($job, $.map(rf.JOBS, function (j) { return j.name; }));
     fillSelect($weapon, $.map(rf.WEAPONS, function (w) { return w.name; }));
 
@@ -94,12 +102,33 @@
   function applyDefaults() {
     $level.val(DEFAULTS.level);
     $levelSlider.val(DEFAULTS.level);
-    $objective.val(DEFAULTS.objective);
+    $goals.find('.goal-check').each(function () {
+      $(this).prop('checked', $.inArray(this.value, DEFAULTS.goals) !== -1);
+    });
     $job.val(DEFAULTS.job);
     $weapon.val(DEFAULTS.weapon);
     $cap.val(DEFAULTS.cap);
     $budgetAuto.prop('checked', DEFAULTS.budgetAuto);
     $reqValue.val(DEFAULTS.reqValue);
+  }
+
+  function readGoals() {
+    return $goals.find('.goal-check:checked').map(function () { return this.value; }).get();
+  }
+
+  /* At the limit, the goals you have not picked stop being selectable rather
+   * than silently doing nothing when clicked. */
+  function syncGoalLimit(chosen) {
+    var atLimit = chosen.length >= rf.MAX_GOALS;
+    $goals.find('.goal-check').each(function () {
+      this.disabled = atLimit && !this.checked;
+    });
+    $goalsNote.text(
+      chosen.length === 0
+        ? 'Pick up to ' + rf.MAX_GOALS + '.'
+        : chosen.length + ' of ' + rf.MAX_GOALS + ' picked' +
+          (atLimit ? ' — clear one to swap it out.' : '.')
+    );
   }
 
   /* Which stat a weapon demands is fixed by the weapon; only how much of it
@@ -325,69 +354,83 @@
     $('#results').html(items.join(''));
   }
 
-  function renderWorth(build, coefficients, objective, weapon) {
-    var info = build.apPriorityInfo;
+  function renderScores(build, goals) {
+    var multiple = goals.length > 1;
+    $('#tradeoffSection').prop('hidden', !multiple);
+    if (!multiple) return;
 
-    if (info) {
-      $('#worthTitle').text('What it costs to chase criticals');
-      var html;
-      if (info.apMax > 0) {
-        var kept = info.apAchieved / info.apMax;
-        html = '<div class="priority">' +
-          '<p class="priority-headline">Attack Power reaches <strong>' + fmt(info.apAchieved) + '</strong>, ' +
-            'against the <strong>' + fmt(info.apMax) + '</strong> this budget could manage on Attack Power alone.</p>' +
-          '<div class="priority-bar"><span class="priority-bar-fill" style="width:' +
-            (kept * 100).toFixed(2) + '%"></span></div>' +
-          '<p class="priority-detail">That is ' + (kept * 100).toFixed(1) + '% of the pure Attack Power ' +
-            'maximum. The optimizer buys as much SEN as it can while holding Attack Power at or above ' +
-            Math.round(info.minApFraction * 100) + '%, rather than trading the two off at a fixed rate.</p>' +
-          '</div>';
-      } else {
-        html = '<div class="priority">' +
-          '<p class="priority-headline">No Attack Power to protect.</p>' +
-          '<p class="priority-detail">' + esc(weapon.name) + ' has no confirmed Attack Power ' +
-            'coefficients, so this goal falls back to maximising Critical Rating outright.</p>' +
-          '</div>';
+    var rows = $.map(build.goalScores, function (score) {
+      if (score.fraction === null) {
+        return '<li class="score">' +
+          '<span class="score-name">' + esc(score.name) + '</span>' +
+          '<span class="score-none">no confirmed data for this weapon</span>' +
+          '</li>';
       }
-      $('#worth').html(html);
-      return;
-    }
-
-    $('#worthTitle').text('How much each point is worth');
-
-    var ranked = [];
-    $.each(coefficients, function (stat, coefficient) {
-      if (coefficient > 0) ranked.push({ stat: stat, coefficient: coefficient });
-    });
-    ranked.sort(function (a, b) { return b.coefficient - a.coefficient; });
-
-    if (!ranked.length) {
-      $('#worth').html('<p class="worth-ignored">' + esc(weapon.name) +
-        ' is not in the forum’s table, so there are no Attack Power coefficients for it. ' +
-        'Nothing here can be optimised.</p>');
-      return;
-    }
-
-    var chips = $.map(ranked, function (entry) {
-      return '<li class="worth-item">' +
-        '<span class="worth-stat">' + entry.stat + '</span>' +
-        '<span class="worth-value">+' + entry.coefficient.toFixed(2) + ' per point</span>' +
+      return '<li class="score">' +
+        '<span>' +
+          '<span class="score-name">' + esc(score.name) + '</span>' +
+          '<span class="score-track">' +
+            '<span class="score-fill" style="width:' + (score.fraction * 100).toFixed(2) + '%"></span>' +
+          '</span>' +
+        '</span>' +
+        '<span class="score-of">' + fmt(Math.round(score.achieved)) +
+          ' of ' + fmt(Math.round(score.max)) + '</span>' +
+        '<span class="score-pct">' + Math.round(score.fraction * 100) + '%</span>' +
         '</li>';
     });
+    $('#scores').html(rows.join(''));
+  }
 
-    var ignored = $.grep(STAT_ORDER, function (stat) {
-      return !(coefficients[stat] > 0);
+  function renderWorth(build, goals, weapon) {
+    $('#worthTitle').text(goals.length > 1
+      ? 'How much each point is worth, per goal'
+      : 'How much each point is worth');
+
+    var used = {};
+    var blocks = $.map(goals, function (goal) {
+      var coefficients = rf.objectiveCoefficients(goal.name, weapon);
+      var ranked = [];
+      $.each(coefficients, function (stat, coefficient) {
+        if (coefficient > 0) {
+          ranked.push({ stat: stat, coefficient: coefficient });
+          used[stat] = true;
+        }
+      });
+      ranked.sort(function (a, b) { return b.coefficient - a.coefficient; });
+
+      var body;
+      if (!ranked.length) {
+        body = '<p class="worth-ignored">' + esc(weapon.name) + ' is not in the forum’s table, ' +
+          'so there are no Attack Power coefficients for it — this goal cannot be optimised.</p>';
+      } else {
+        body = '<ul class="worth-list">' + $.map(ranked, function (entry) {
+          return '<li class="worth-item">' +
+            '<span class="worth-stat">' + entry.stat + '</span>' +
+            '<span class="worth-value">+' + entry.coefficient.toFixed(2) + ' per point</span>' +
+            '</li>';
+        }).join('') + '</ul>';
+      }
+
+      return '<div class="worth-goal">' +
+        (goals.length > 1 ? '<h4 class="worth-goal-name">' + esc(goal.name) + '</h4>' : '') +
+        body + '</div>';
     });
 
-    var html = '<ul class="worth-list">' + chips.join('') + '</ul>';
+    var ignored = $.grep(STAT_ORDER, function (stat) { return !used[stat]; });
+    var html = blocks.join('');
     if (ignored.length) {
-      html += '<p class="worth-ignored">Does nothing for this goal: ' + ignored.join(', ') + '.</p>';
+      html += '<p class="worth-ignored">Does nothing for ' +
+        (goals.length > 1 ? 'any of these goals' : 'this goal') + ': ' + ignored.join(', ') + '.</p>';
     }
     $('#worth').html(html);
   }
 
-  function renderNotes(build, objective, weapon, level, cap, requirement) {
+  function renderNotes(build, goals, weapon, level, cap, requirement) {
     var notes = [];
+    var goalLabel = $.map(goals, function (goal) { return goal.name; }).join(' + ');
+    function chose(name) {
+      return $.grep(goals, function (goal) { return goal.name === name; }).length > 0;
+    }
 
     // The weapon requirement comes first: if it was not met, nothing else on
     // the page describes a build this character could actually equip.
@@ -413,7 +456,7 @@
       } else if (requirement.unrestricted >= needed) {
         notes.push({
           text: 'The ' + fmt(needed) + ' ' + stat + ' the weapon needs costs this build nothing — ' +
-            objective.name + ' buys ' + stat + ' up to ' + fmt(requirement.unrestricted) +
+            goalLabel + ' buys ' + stat + ' up to ' + fmt(requirement.unrestricted) +
             ' on its own merits anyway.'
         });
       } else {
@@ -421,7 +464,7 @@
           text: 'Meeting the requirement raised ' + stat + ' from the ' + fmt(requirement.unrestricted) +
             ' this goal would have chosen to the ' + fmt(needed) + ' the weapon needs, which costs ' +
             fmt(rf.costBetween(requirement.unrestricted, needed)) + ' points. Those went to being able ' +
-            'to hold the weapon rather than to ' + objective.name + '.'
+            'to hold the weapon rather than to ' + goalLabel + '.'
         });
       }
     }
@@ -446,15 +489,27 @@
       });
     }
 
-    if (weapon.kind === 'crossbow' && objective.needsWeapon) {
+    if (weapon.kind === 'crossbow' && chose('Attack Power')) {
       notes.push({ warn: true, text: rf.CROSSBOW_DISPUTE_NOTE });
     }
 
-    if (objective.name.indexOf('DoT') !== -1) {
+    if (chose('DoT Damage')) {
       notes.push({
         warn: true,
-        text: 'This goal rests on the DoT coefficients — 1.0 per CHA and 0.6 per CON — which come ' +
-          'from your own testing and nothing else. Nobody has posted a number for them.'
+        text: 'DoT Damage rests on the coefficients from your own testing — 1.0 per CHA and 0.6 per ' +
+          'CON — and nothing else. Nobody has posted a number for them.'
+      });
+    }
+
+    if (chose('Heal Power')) {
+      notes.push({ warn: true, text: rf.HEAL_POWER_NOTE });
+    }
+
+    if (goals.length > 1) {
+      notes.push({
+        text: 'Goals are balanced by how close each gets to its own solo maximum, not by adding their ' +
+          'raw numbers together — those run from 0.5 per point to 5.5 per point, so a raw sum would ' +
+          'just hand the build to whichever goal has the biggest coefficients.'
       });
     }
 
@@ -478,7 +533,7 @@
     }).join(''));
   }
 
-  function announce(build, objective, job, weapon, level) {
+  function announce(build, goalLabel, job, weapon, level) {
     if (announceTimer) clearTimeout(announceTimer);
     announceTimer = setTimeout(function () {
       var spread = $.map(STAT_ORDER, function (stat) {
@@ -486,7 +541,7 @@
       }).join(', ');
       $announcer.text(
         'Level ' + level + ' ' + job.name + ' with a ' + weapon.name +
-        ', building for ' + objective.name + '. ' + spread + '. ' +
+        ', building for ' + goalLabel + '. ' + spread + '. ' +
         fmt(build.spent) + ' of ' + fmt(build.budget) + ' stat points allocated.'
       );
     }, 600);
@@ -501,28 +556,44 @@
     var cap = readNumber($cap, 50, 500, DEFAULTS.cap);
     var job = rf.JOBS_BY_NAME[$job.val()];
     var weapon = rf.WEAPONS_BY_NAME[$weapon.val()];
-    var objective = rf.OBJECTIVES_BY_NAME[$objective.val()];
+
+    var chosen = readGoals();
+    syncGoalLimit(chosen);
+    var goals = $.map(chosen, function (name) { return rf.OBJECTIVES_BY_NAME[name]; });
+    var goalLabel = chosen.join(' + ');
+
+    $('#sheetObjective').text(chosen.length ? goalLabel : 'Nothing picked yet');
+    $('#sheetCharacter').text('Level ' + level + ' ' + job.name + ' with ' +
+      (weapon.kind === 'none' ? 'no weapon' : 'a ' + weapon.name));
+    $('#sheetEmpty').prop('hidden', chosen.length > 0);
+    $('#sheetBody').prop('hidden', chosen.length === 0);
 
     var earned = rf.totalStatPoints(level);
     if ($budgetAuto.is(':checked')) $budget.val(earned);
-    var budget = readNumber($budget, 0, 200000, earned);
 
     syncRequirementControl(weapon);
+
+    if (!chosen.length) {
+      $announcer.text('No goal picked. Choose one to see a build.');
+      return;
+    }
+
+    var budget = readNumber($budget, 0, 200000, earned);
     var floors = readRequirement(weapon);
 
     var params = {
-      objectiveName: objective.name,
+      goalNames: chosen,
       weapon: weapon,
       level: level,
       budget: budget,
       cap: cap
     };
-    var solved = rf.solve($.extend({ floors: floors }, params));
+    var solved = rf.solveGoals($.extend({ floors: floors }, params));
     var build = solved.build;
 
     // Solving again without the requirement says whether it changed anything:
-    // a goal that already wants that stat pays nothing for it. A second solve
-    // is a couple of milliseconds, cheap enough to do on every keystroke.
+    // a build that already wants that stat pays nothing for it. The extra
+    // solve is a few milliseconds, cheap enough to do on every keystroke.
     var requirement = null;
     if (floors) {
       var reqStat = Object.keys(floors)[0];
@@ -530,22 +601,18 @@
         stat: reqStat,
         needed: floors[reqStat],
         reached: build.stats[reqStat],
-        unrestricted: rf.solve(params).build.stats[reqStat]
+        unrestricted: rf.solveGoals(params).build.stats[reqStat]
       };
     }
-
-    $('#sheetObjective').text(objective.name);
-    $('#sheetCharacter').text('Level ' + level + ' ' + job.name + ' with ' +
-      (weapon.kind === 'none' ? 'no weapon' : 'a ' + weapon.name));
-    $('#objectiveNote').text(objective.note);
 
     renderLedger(build, level, earned);
     drawHexagon(build.stats, cap);
     renderAllocation(build, cap, requirement);
     renderResults(build, job, weapon, level);
-    renderWorth(build, solved.coefficients, objective, weapon);
-    renderNotes(build, objective, weapon, level, cap, requirement);
-    announce(build, objective, job, weapon, level);
+    renderScores(build, goals);
+    renderWorth(build, goals, weapon);
+    renderNotes(build, goals, weapon, level, cap, requirement);
+    announce(build, goalLabel, job, weapon, level);
   }
 
   function syncSliderFill() {
@@ -559,7 +626,8 @@
   $(function () {
     $level = $('#level');
     $levelSlider = $('#levelSlider');
-    $objective = $('#objective');
+    $goals = $('#goals');
+    $goalsNote = $('#goalsNote');
     $job = $('#job');
     $weapon = $('#weapon');
     $cap = $('#cap');
@@ -587,7 +655,8 @@
       recalculate();
     });
 
-    $objective.add($job).on('change', recalculate);
+    $job.on('change', recalculate);
+    $goals.on('change', '.goal-check', recalculate);
 
     $weapon.on('change', function () {
       // The requirement belongs to the weapon. An amount typed for the last

@@ -267,13 +267,6 @@
   // of Lekoi's divisor at level 250.
   var CRIT_CHANCE_CAP_PERCENT = 50.0;
 
-  // How close "Attack Power + Critical" must stay to the pure-AP maximum
-  // achievable with the same budget. Not sourced -- a design choice for
-  // this calculator, checked so it isn't a no-op: at 99%, across every
-  // weapon and level tried, Critical Chance rises 30-90% relative to a
-  // pure-AP build while giving up under 1% of Attack Power.
-  var AP_CRITICAL_MIN_AP_FRACTION = 0.99;
-
   function criticalChanceDivisor(level) {
     return (level / 10) + 1.9;
   }
@@ -300,9 +293,37 @@
     return stats.CHA * 1.0 + stats.CON * 0.6;
   }
 
+  /* UNVERIFIED, and the weakest number in this module. 5.5 per CHA and 5.5
+   * per INT, from a single hedged post on topic 3354 (ryle23, 13 Aug 2023):
+   * "i think 1 cha = 5.5 heal points,,and prolly int gives around 5.5 heal
+   * points too..". Nobody replied, and the thread's own author -- who
+   * measured everything else here on the live server -- said only that "Heal
+   * Power from CHA will be added later" and never came back to it.
+   *
+   * Community lore elsewhere claims CHA is worth about three times INT for
+   * healing, which contradicts the equal weighting above. That claim traces
+   * to fansites and old Steam threads about other servers, so it is recorded
+   * as an open conflict rather than blended into a number nobody measured. */
+  function healPower(stats) {
+    return stats.CHA * 5.5 + stats.INT * 5.5;
+  }
+
+  var HEAL_POWER_NOTE =
+    'Heal Power rests on one hedged forum post — “i think 1 cha = 5.5 heal ' +
+    'points,,and prolly int gives around 5.5 heal points too..” (ryle23, Aug ' +
+    '2023). No one replied and no one confirmed it. Community lore elsewhere ' +
+    'says CHA is worth roughly three times INT for healing, which would ' +
+    'change this build a lot; that claim comes from other servers, so it is ' +
+    'not used here. Treat this goal as the least trustworthy of the lot.';
+
   // --------------------------------------------------------------------
-  // Objectives
+  // Goals
   // --------------------------------------------------------------------
+  //
+  // These are the atomic things a build can chase. Combinations are made by
+  // picking several (see solveGoals), not by listing every pairing here.
+
+  var MAX_GOALS = 3;
 
   var OBJECTIVES = [
     {
@@ -310,17 +331,16 @@
       note: 'Flat per weapon type; measured on the live server.',
       needsWeapon: true, confidence: 'measured'
     },
+    { name: 'Critical', note: '1.0 per SEN.', needsWeapon: false, confidence: 'measured' },
+    { name: 'Accuracy', note: '1.0 per CON.', needsWeapon: false, confidence: 'measured' },
     {
-      name: 'Attack Power + DoT',
-      note: 'AP and DoT weighted 1:1. The DoT half is unverified.',
-      needsWeapon: true, confidence: 'unverified'
+      name: 'DoT Damage', note: '1.0 per CHA, 0.6 per CON. Field-tested only.',
+      needsWeapon: false, confidence: 'unverified'
     },
-    {
-      name: 'Attack Power + Critical',
-      note: 'Maximises Critical Chance without Attack Power dropping below ' +
-        Math.round(AP_CRITICAL_MIN_AP_FRACTION * 100) + '% of its own achievable max.',
-      needsWeapon: true, confidence: 'measured'
-    },
+    { name: 'Physical Defence', note: '1.5 per STR.', needsWeapon: false, confidence: 'measured' },
+    { name: 'Magic Defence', note: '1.5 per INT.', needsWeapon: false, confidence: 'measured' },
+    { name: 'Dodge', note: '1.5 per DEX.', needsWeapon: false, confidence: 'measured' },
+    { name: 'Critical Defence', note: '0.5 per CHA.', needsWeapon: false, confidence: 'measured' },
     {
       name: 'Max HP', note: '2 per STR, plus a class term this calculator can’t confirm.',
       needsWeapon: false, confidence: 'inherited'
@@ -329,14 +349,8 @@
       name: 'Max MP', note: '4 per INT, plus a class term this calculator can’t confirm.',
       needsWeapon: false, confidence: 'inherited'
     },
-    { name: 'Physical Defence', note: '1.5 per STR.', needsWeapon: false, confidence: 'measured' },
-    { name: 'Magic Defence', note: '1.5 per INT.', needsWeapon: false, confidence: 'measured' },
-    { name: 'Accuracy', note: '1.0 per CON.', needsWeapon: false, confidence: 'measured' },
-    { name: 'Dodge', note: '1.5 per DEX.', needsWeapon: false, confidence: 'measured' },
-    { name: 'Critical', note: '1.0 per SEN.', needsWeapon: false, confidence: 'measured' },
-    { name: 'Critical Defence', note: '0.5 per CHA.', needsWeapon: false, confidence: 'measured' },
     {
-      name: 'DoT Damage', note: '1.0 per CHA, 0.6 per CON. Field-tested only.',
+      name: 'Heal Power', note: '5.5 per CHA and per INT. One hedged forum post, unconfirmed.',
       needsWeapon: false, confidence: 'unverified'
     }
   ];
@@ -345,6 +359,7 @@
   OBJECTIVES.forEach(function (o) { OBJECTIVES_BY_NAME[o.name] = o; });
 
   var FLAT_OBJECTIVE_COEFFICIENTS = {
+    'Heal Power': { CHA: 5.5, INT: 5.5 },
     'Max HP': { STR: 2.0 },
     'Max MP': { INT: 4.0 },
     'Physical Defence': { STR: 1.5 },
@@ -356,19 +371,10 @@
     'DoT Damage': { CHA: 1.0, CON: 0.6 }
   };
 
-  /* Marginal value of one point in each stat, for the given objective.
-   * Does NOT cover "Attack Power + Critical" -- that objective isn't a
-   * fixed linear weighting, so it has no single coefficients map and is
-   * optimized separately by optimizeApPlusCritical(). */
+  /* Marginal value of one point in each stat, for one goal on its own. */
   function objectiveCoefficients(objectiveName, weapon) {
     if (objectiveName === 'Attack Power') {
       return attackPowerCoefficients(weapon);
-    }
-    if (objectiveName === 'Attack Power + DoT') {
-      var coefficients = attackPowerCoefficients(weapon);
-      coefficients.CHA = (coefficients.CHA || 0) + 1.0;
-      coefficients.CON = (coefficients.CON || 0) + 0.6;
-      return coefficients;
     }
     var flat = FLAT_OBJECTIVE_COEFFICIENTS[objectiveName];
     var copy = {};
@@ -378,11 +384,12 @@
     return copy;
   }
 
-  /* Per-stat value tapers for optimize(), if this objective needs any.
-   * Only "Critical" does via this function -- "Attack Power + Critical"
-   * builds its own taper internally. Past the level-scaled Critical Rating
-   * that caps chance-to-crit at 50%, further SEN keeps raising Critical
-   * Rating but stops raising that chance, so it is worth nothing more. */
+  /* Per-stat value tapers for optimize(), if this goal needs any. Only
+   * "Critical" does: past the level-scaled Critical Rating that caps
+   * chance-to-crit at 50%, further SEN keeps raising Critical Rating but
+   * stops raising that chance, so it is worth nothing more to this goal.
+   * solveGoals() folds that into the combined taper when Critical is one of
+   * several picked, since SEN can still be paying for the others. */
   function objectiveTapers(objectiveName, weapon, level) {
     if (objectiveName !== 'Critical') return {};
     return { SEN: { threshold: criticalRatingForChanceCap(level), after: 0.0 } };
@@ -391,6 +398,15 @@
   // --------------------------------------------------------------------
   // Optimizer
   // --------------------------------------------------------------------
+
+  /* Score a stat spread against a linear objective. */
+  function linearValue(coefficients, stats) {
+    var total = 0;
+    for (var i = 0; i < STATS.length; i++) {
+      total += (coefficients[STATS[i]] || 0) * stats[STATS[i]];
+    }
+    return total;
+  }
 
   /* Pop the best pending purchase. Mirrors Python's heapq on tuples of
    * (-value/cost, stat): smallest key wins, ties broken by stat name
@@ -437,7 +453,7 @@
 
     var result = {
       stats: stats, budget: budget, spent: 0, leftover: 0,
-      floorsCost: 0, value: 0, capped: [], apPriorityInfo: null
+      floorsCost: 0, value: 0, capped: [], goalScores: null
     };
     var remaining = budget;
 
@@ -489,111 +505,88 @@
 
     result.spent = budget - remaining;
     result.leftover = remaining;
-    var value = 0;
-    for (var i = 0; i < STATS.length; i++) {
-      value += (coefficients[STATS[i]] || 0) * stats[STATS[i]];
-    }
-    result.value = value;
+    result.value = linearValue(coefficients, stats);
     return result;
   }
 
-  /* Maximise Critical Chance without meaningfully giving up Attack Power.
+  /* Optimize for several goals at once.
    *
-   * A flat weighted sum (say "+1.0 on SEN") doesn't do that: it treats a
-   * point of Critical Rating as worth a fixed amount regardless of what the
-   * same SP would have earned in Attack Power, so it pulls SP away from
-   * whichever stat is actually best for AP. This instead:
+   * Goal coefficients are not comparable as they stand -- Max MP is 4.0 per
+   * INT, Critical Defence 0.5 per CHA, Heal Power 5.5 per CHA -- so adding
+   * them raw would let whichever goal happens to carry the biggest numbers
+   * swamp the rest, and the "best" build would just be whichever goal had
+   * the largest coefficients. Each goal is instead divided by what it could
+   * reach alone on the same budget, so every goal contributes a fraction of
+   * its own maximum and they trade off on equal terms.
    *
-   *   1. Finds the true Attack Power maximum for this budget.
-   *   2. Binary-searches the smallest extra per-point weight on SEN for
-   *      which Attack Power still never drops below `minApFraction` of that
-   *      maximum, and uses the build found at that weight.
+   * The build comes back with, per goal, how much of its solo maximum it
+   * actually reached. That is the only honest way to show what picking more
+   * than one goal gave up, and the UI leans on it.
    *
-   * If the weapon has no confirmed AP data, the floor is 0 and this reduces
-   * to maximising Critical Rating outright -- there is no AP to protect.
+   * This supersedes the fixed "Attack Power + Critical" objective, which
+   * protected 99% of Attack Power and spent the slack on SEN. That is a
+   * different question -- "max AP, crit for free" rather than "balance
+   * these" -- and rose_formulas.py still answers it.
    */
-  function optimizeApPlusCritical(weapon, level, budget, options) {
-    options = options || {};
-    var cap = options.cap === undefined ? DEFAULT_STAT_CAP : options.cap;
-    var minApFraction = options.minApFraction === undefined
-      ? AP_CRITICAL_MIN_AP_FRACTION : options.minApFraction;
-    // Equipment requirements are mandatory, so they bind the pure-AP baseline
-    // too. Leaving them off it would make apMax a target this build could
-    // never reach and turn the floor below into an impossible bar.
-    //
-    // This parameter goes beyond rose_formulas.py, whose
-    // optimize_ap_plus_critical takes no floors -- so it is the one path the
-    // Python cannot be compared against. optimize() itself does take floors
-    // there, and that is checked (see README).
-    var floors = options.floors || null;
-
-    var apCoefficients = attackPowerCoefficients(weapon);
-    var senApValue = apCoefficients.SEN || 0;
-    // Once SEN caps Critical Chance, extra SEN is only worth its own fixed
-    // Attack Power value -- independent of the bonus weight searched below,
-    // which only ever applies pre-cap.
-    var tapers = { SEN: { threshold: criticalRatingForChanceCap(level), after: senApValue } };
-
-    var pureApBuild = optimize(apCoefficients, budget, { cap: cap, floors: floors });
-    var apMax = attackPower(pureApBuild.stats, weapon);
-    var apFloor = apMax * minApFraction;
-
-    function buildForBonus(bonus) {
-      var coefficients = attackPowerCoefficients(weapon);
-      coefficients.SEN = senApValue + bonus;
-      return optimize(coefficients, budget, { cap: cap, tapers: tapers, floors: floors });
-    }
-
-    function meetsFloor(bonus) {
-      return attackPower(buildForBonus(bonus).stats, weapon) >= apFloor;
-    }
-
-    // bonus = 0 is exactly the pure-AP build (the taper is a no-op there),
-    // which trivially meets its own floor, so lo = 0 always satisfies the
-    // search invariant.
-    var lo = 0.0, hi = 1.0;
-    while (meetsFloor(hi) && hi < 1e6) hi *= 2;
-    for (var i = 0; i < 40; i++) {
-      var mid = (lo + hi) / 2;
-      if (meetsFloor(mid)) lo = mid; else hi = mid;
-    }
-
-    var build = buildForBonus(lo);
-    build.apPriorityInfo = {
-      apMax: apMax,
-      apAchieved: attackPower(build.stats, weapon),
-      minApFraction: minApFraction,
-      senBonus: lo
-    };
-    return build;
-  }
-
-  /* One call for the whole calculation, so the UI never has to know which
-   * objectives are linear and which aren't.
-   *
-   * params.floors is an optional {stat: minimum} map for equipment the build
-   * has to be able to equip -- a weapon that cannot be held is worth nothing,
-   * so those points are bought before anything is optimized.
-   */
-  function solve(params) {
+  function solveGoals(params) {
     var weapon = params.weapon;
     var level = params.level;
     var budget = params.budget;
-    var cap = params.cap;
+    var cap = params.cap === undefined ? DEFAULT_STAT_CAP : params.cap;
     var floors = params.floors || null;
+    var names = params.goalNames || [];
 
-    if (params.objectiveName === 'Attack Power + Critical') {
-      return {
-        build: optimizeApPlusCritical(weapon, level, budget, { cap: cap, floors: floors }),
-        coefficients: {}
+    var goals = [];
+    names.forEach(function (name) {
+      var coefficients = objectiveCoefficients(name, weapon);
+      var tapers = objectiveTapers(name, weapon, level);
+      var solo = optimize(coefficients, budget, { cap: cap, tapers: tapers, floors: floors });
+      goals.push({
+        name: name,
+        coefficients: coefficients,
+        tapers: tapers,
+        max: linearValue(coefficients, solo.stats)
+      });
+    });
+
+    var combined = {};
+    var senValuePastCritCap = 0;
+    var wantsCritTaper = false;
+
+    goals.forEach(function (goal) {
+      if (!(goal.max > 0)) return;   // nothing to scale against; see Unarmed
+      var scale = 1 / goal.max;
+      STATS.forEach(function (stat) {
+        var coefficient = goal.coefficients[stat] || 0;
+        if (coefficient > 0) combined[stat] = (combined[stat] || 0) + coefficient * scale;
+      });
+      // Past the Critical chance cap SEN stops paying for the Critical goal,
+      // but keeps paying for any other selected goal that wanted it.
+      if (goal.tapers.SEN) wantsCritTaper = true;
+      else senValuePastCritCap += (goal.coefficients.SEN || 0) * scale;
+    });
+
+    var tapers = {};
+    if (wantsCritTaper) {
+      tapers.SEN = {
+        threshold: criticalRatingForChanceCap(level),
+        after: senValuePastCritCap
       };
     }
-    var coefficients = objectiveCoefficients(params.objectiveName, weapon);
-    var tapers = objectiveTapers(params.objectiveName, weapon, level);
-    return {
-      build: optimize(coefficients, budget, { cap: cap, tapers: tapers, floors: floors }),
-      coefficients: coefficients
-    };
+
+    var build = optimize(combined, budget, { cap: cap, tapers: tapers, floors: floors });
+
+    build.goalScores = goals.map(function (goal) {
+      var achieved = linearValue(goal.coefficients, build.stats);
+      return {
+        name: goal.name,
+        achieved: achieved,
+        max: goal.max,
+        fraction: goal.max > 0 ? achieved / goal.max : null
+      };
+    });
+
+    return { build: build, coefficients: combined, goals: goals };
   }
 
   return {
@@ -602,8 +595,9 @@
     DEFAULT_STAT_CAP: DEFAULT_STAT_CAP,
     MAX_LEVEL: MAX_LEVEL,
     CRIT_CHANCE_CAP_PERCENT: CRIT_CHANCE_CAP_PERCENT,
-    AP_CRITICAL_MIN_AP_FRACTION: AP_CRITICAL_MIN_AP_FRACTION,
     CROSSBOW_DISPUTE_NOTE: CROSSBOW_DISPUTE_NOTE,
+    HEAL_POWER_NOTE: HEAL_POWER_NOTE,
+    MAX_GOALS: MAX_GOALS,
     JOBS: JOBS,
     JOBS_BY_NAME: JOBS_BY_NAME,
     WEAPONS: WEAPONS,
@@ -631,10 +625,11 @@
     criticalRatingForChanceCap: criticalRatingForChanceCap,
     criticalChance: criticalChance,
     dotDamage: dotDamage,
+    healPower: healPower,
     objectiveCoefficients: objectiveCoefficients,
     objectiveTapers: objectiveTapers,
+    linearValue: linearValue,
     optimize: optimize,
-    optimizeApPlusCritical: optimizeApPlusCritical,
-    solve: solve
+    solveGoals: solveGoals
   };
 }));

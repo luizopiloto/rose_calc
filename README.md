@@ -38,22 +38,19 @@ overspends:
 node js/self-check.js
 ```
 
-The port was also checked directly against the Python, sweeping both
-implementations over the cross-product of objectives, weapons, levels, stat
-caps and weapon requirements (6,700 builds, 4,400 of them with a requirement
-that actually cost points) and comparing the stat spread, SP spent, SP left
-over, which stats hit their ceiling, and every derived stat. All 6,700 agree
-exactly.
+The optimizer core is still checked directly against the Python: both
+`optimize()` implementations are swept over the ten goals the two projects
+share, every weapon, five levels and four weapon-requirement settings (2,000
+builds), comparing the stat spread, SP spent, SP left over, floor cost and
+objective value. All 2,000 agree exactly.
 
-Two things that comparison cannot cover, both checked by `js/self-check.js`
-instead:
+The sweep runs with a cap high enough to never bind, because the two projects
+now disagree about what the cap means (see below) — that keeps the intended
+difference out of the comparison while still verifying everything else.
 
-- **The stat cap means something different here**, deliberately — see below.
-  The parity sweep therefore runs with a cap high enough to never bind in
-  either implementation, which verifies everything else about the port while
-  leaving the one intended difference out of the comparison.
-- `rose_formulas.py`'s `optimize_ap_plus_critical` takes no floors argument,
-  so weapon requirements on that one objective have no Python counterpart.
+Three things have no Python counterpart and are covered by `js/self-check.js`
+alone: the goal grid and its normalized combination, the Heal Power goal, and
+weapon status requirements on combined goals.
 
 ## What changed from the PySide6 version
 
@@ -72,6 +69,36 @@ and explains itself on hover — Max HP, Max MP and DoT damage. Everything
 without that mark comes from measurements players posted on the official
 forum. Nothing about the arithmetic changed; it is the same caveats the
 original text carried, moved next to the numbers they apply to.
+
+**Changed: pick up to three goals, not one combination from a list.** The
+original had a dropdown holding both base goals and hand-built combinations
+("Attack Power + DoT", "Attack Power + Critical"). This has a checkbox grid of
+the eleven base goals; tick up to three and they are optimized together.
+
+Combining them is not a matter of adding coefficients. They run from 0.5 per
+point (Critical Defence) to 5.5 (Heal Power), so a raw sum would just hand
+every mixed build to whichever goal carries the biggest numbers. Each goal is
+divided by what it could reach alone on the same budget, so all of them
+contribute a fraction of their own maximum and trade off on equal terms. The
+page then shows each goal against its solo maximum, which is the only honest
+way to display what a combination gave up.
+
+This drops the old "Attack Power + Critical", which protected 99% of Attack
+Power and spent the slack on SEN. That answers a different question — "max AP,
+crit for free" rather than "balance these two" — and ticking both boxes now
+gives the balanced answer instead. `rose_formulas.py` still has the floor
+version if it is wanted back.
+
+**Added: a Heal Power goal.** 5.5 per CHA and 5.5 per INT, and the least
+trustworthy number in the tool. It rests on one hedged post on the official
+forum (ryle23, Aug 2023: *"i think 1 cha = 5.5 heal points,,and prolly int
+gives around 5.5 heal points too.."*) which nobody answered, in the same thread
+whose author said only that "Heal Power from CHA will be added later" and never
+returned to it. Community lore elsewhere puts CHA at roughly three times INT
+for healing, which would change the build substantially — that claim traces to
+fansites and other servers, so it is recorded as an open conflict rather than
+blended into a number nobody measured. The page says all this when the goal is
+picked.
 
 **Fixed: what the 425 cap limits.** It caps the points you *put into* a stat,
 not the value the stat shows — so a stat tops out at its creation value plus

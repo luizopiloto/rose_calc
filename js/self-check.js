@@ -114,29 +114,77 @@ var cappedBuild = rf.optimize(critCoefficients, 50000, { cap: 425, tapers: lowLe
 assert(cappedBuild.stats.SEN === 100, 'optimizer stops at the taper, not the cap');
 assert(cappedBuild.leftover > 0, 'the rest of the SP goes unspent');
 
-// -- "Attack Power + Critical" --------------------------------------------
+// -- Combining goals ------------------------------------------------------
 
-var apOnly = rf.optimize(rf.objectiveCoefficients('Attack Power', gun), rf.totalStatPoints(250), { cap: 425 });
-var apOnlyValue = rf.attackPower(apOnly.stats, gun);
-var apOnlyCrit = rf.criticalChance(apOnly.stats, 250);
+// One goal alone must reach its own maximum, by definition.
+rf.OBJECTIVES.forEach(function (goal) {
+  var one = rf.solveGoals({
+    goalNames: [goal.name], weapon: gun, level: 250,
+    budget: rf.totalStatPoints(250), cap: 425
+  });
+  var score = one.build.goalScores[0];
+  if (score.fraction !== null) {
+    assert(Math.abs(score.fraction - 1) < 1e-9, goal.name + ' alone reaches 100% of itself');
+  }
+});
 
-var comboBuild = rf.optimizeApPlusCritical(gun, 250, rf.totalStatPoints(250), { cap: 425 });
-var comboAp = rf.attackPower(comboBuild.stats, gun);
-var comboCrit = rf.criticalChance(comboBuild.stats, 250);
+// Coefficients run from 0.5 per point (Critical Defence) to 5.5 (Heal Power).
+// Adding them raw would hand every mixed build to whichever goal carries the
+// biggest numbers, so each is scaled by its own solo maximum first. The test
+// of that: pairing a small-coefficient goal with a large one must still leave
+// the small one with a real share.
+var pairing = rf.solveGoals({
+  goalNames: ['Critical Defence', 'Heal Power'], weapon: gun, level: 250,
+  budget: rf.totalStatPoints(250), cap: 425
+});
+pairing.build.goalScores.forEach(function (score) {
+  assert(score.fraction > 0.5, score.name + ' keeps a real share against a goal 11x its scale');
+});
 
-assert(comboAp >= apOnlyValue * rf.AP_CRITICAL_MIN_AP_FRACTION, 'AP floor is respected');
-assert(comboCrit > apOnlyCrit * 1.2, 'and the crit gain is real, not a token');
-console.log(
-  '\nAP+Crit (Gun, lvl 250): AP ' + comboAp +
-  ' (' + (comboAp / apOnlyValue * 100).toFixed(1) + '% of pure-AP max ' + apOnlyValue + '), ' +
-  'crit ' + comboCrit.toFixed(2) + '% (vs ' + apOnlyCrit.toFixed(2) + '% incidental from pure AP)'
-);
+// Adding a goal cannot improve the ones already there.
+var apAlone = rf.solveGoals({
+  goalNames: ['Attack Power'], weapon: gun, level: 250, budget: rf.totalStatPoints(250), cap: 425
+});
+var apPlusCrit = rf.solveGoals({
+  goalNames: ['Attack Power', 'Critical'], weapon: gun, level: 250, budget: rf.totalStatPoints(250), cap: 425
+});
+assert(apPlusCrit.build.goalScores[0].achieved <= apAlone.build.goalScores[0].achieved,
+  'adding Critical never raises Attack Power');
+assert(apPlusCrit.build.goalScores[1].fraction > 0.5,
+  'and Critical gets a real share of the build, not a token');
 
-// A weapon with no confirmed AP data must degenerate cleanly into
-// maximising Critical Rating, not divide by zero.
+// A goal with no confirmed data for this weapon scores null rather than
+// dividing by zero, and drops out of the combination.
 var unarmed = rf.WEAPONS_BY_NAME.Unarmed;
-var unarmedBuild = rf.optimizeApPlusCritical(unarmed, 250, rf.totalStatPoints(250), { cap: 425 });
-assert(unarmedBuild.stats.SEN === rf.statCeiling('SEN', 425), 'Unarmed AP+Crit maximises Critical Rating');
+var unarmedPair = rf.solveGoals({
+  goalNames: ['Attack Power', 'Critical'], weapon: unarmed, level: 250,
+  budget: rf.totalStatPoints(250), cap: 425
+});
+assert(unarmedPair.build.goalScores[0].fraction === null, 'Unarmed Attack Power has no max to score against');
+assert(unarmedPair.build.stats.SEN === rf.statCeiling('SEN', 425), 'so the build falls back to Critical alone');
+
+// Picking nothing spends nothing rather than throwing.
+var nothing = rf.solveGoals({
+  goalNames: [], weapon: gun, level: 250, budget: rf.totalStatPoints(250), cap: 425
+});
+assert(nothing.build.spent === 0, 'no goals means no points spent');
+rf.STATS.forEach(function (stat) {
+  assert(nothing.build.stats[stat] === rf.BASE_STATS[stat], stat + ' stays at its creation value');
+});
+
+assert(rf.MAX_GOALS === 3, 'three goals at a time');
+
+// -- Heal Power -----------------------------------------------------------
+
+// UNVERIFIED: one hedged forum post (ryle23, Aug 2023), never confirmed.
+assert(rf.healPower({ STR: 0, DEX: 0, INT: 0, CON: 0, CHA: 100, SEN: 0 }) === 550,
+  '100 CHA is 550 heal points');
+assert(rf.healPower({ STR: 0, DEX: 0, INT: 100, CON: 0, CHA: 0, SEN: 0 }) === 550,
+  '100 INT is 550 heal points, per the same post');
+var healCoefficients = rf.objectiveCoefficients('Heal Power', gun);
+assert(healCoefficients.CHA === 5.5 && healCoefficients.INT === 5.5,
+  'Heal Power weights CHA and INT equally');
+assert(Object.keys(healCoefficients).length === 2, 'and nothing else');
 
 // -- Equipment requirements (mandatory floors) ----------------------------
 
@@ -171,13 +219,13 @@ var strFloor = {};
 strFloor[launcher.requires] = 158;
 assert(launcher.requires === 'STR', 'the Launcher requirement is on STR');
 
-var noFloor = rf.solve({
-  objectiveName: 'Max MP', weapon: launcher, level: 250, budget: budget250, cap: 425
+var noFloor = rf.solveGoals({
+  goalNames: ['Max MP'], weapon: launcher, level: 250, budget: budget250, cap: 425
 });
 assert(noFloor.build.stats.STR === rf.BASE_STATS.STR, 'Max MP buys no STR on its own');
 
-var withFloor = rf.solve({
-  objectiveName: 'Max MP', weapon: launcher, level: 250, budget: budget250, cap: 425, floors: strFloor
+var withFloor = rf.solveGoals({
+  goalNames: ['Max MP'], weapon: launcher, level: 250, budget: budget250, cap: 425, floors: strFloor
 });
 assert(withFloor.build.stats.STR === 158, 'the floor puts STR at exactly the requirement');
 assert(withFloor.build.floorsCost === rf.costBetween(rf.BASE_STATS.STR, 158),
@@ -194,48 +242,46 @@ assert(withFloor.build.leftover === noFloor.build.leftover - 2403,
 
 // When the goal can absorb the whole budget, it does cost. Gun Attack Power
 // (CON/DEX/SEN) has no use for STR at all, so a STR requirement is pure loss.
-var apNoFloor = rf.solve({
-  objectiveName: 'Attack Power', weapon: gun, level: 250, budget: budget250, cap: 425
+var apNoFloor = rf.solveGoals({
+  goalNames: ['Attack Power'], weapon: gun, level: 250, budget: budget250, cap: 425
 });
-var apFloored = rf.solve({
-  objectiveName: 'Attack Power', weapon: gun, level: 250, budget: budget250, cap: 425, floors: strFloor
+var apFloored = rf.solveGoals({
+  goalNames: ['Attack Power'], weapon: gun, level: 250, budget: budget250, cap: 425, floors: strFloor
 });
 assert(apFloored.build.stats.STR === 158, 'the floor is met under Attack Power too');
 assert(rf.attackPower(apFloored.build.stats, gun) < rf.attackPower(apNoFloor.build.stats, gun),
   'and there it really does cost the goal Attack Power');
 
 // A floor already satisfied at character creation changes nothing.
-var trivial = rf.solve({
-  objectiveName: 'Max MP', weapon: launcher, level: 250, budget: budget250, cap: 425, floors: { STR: 10 }
+var trivial = rf.solveGoals({
+  goalNames: ['Max MP'], weapon: launcher, level: 250, budget: budget250, cap: 425, floors: { STR: 10 }
 });
 assert(trivial.build.floorsCost === 0, 'a floor below the creation value costs nothing');
 assert(trivial.build.stats.INT === noFloor.build.stats.INT, 'and leaves the build untouched');
 
 // A floor above what points can reach is clamped to the ceiling, not chased
 // past it -- and the ceiling is the creation value plus the cap, not the cap.
-var overCap = rf.solve({
-  objectiveName: 'Max MP', weapon: launcher, level: 250, budget: budget250, cap: 200, floors: { STR: 300 }
+var overCap = rf.solveGoals({
+  goalNames: ['Max MP'], weapon: launcher, level: 250, budget: budget250, cap: 200, floors: { STR: 300 }
 });
 assert(overCap.build.stats.STR === 215, 'a floor above the ceiling stops at 15 + 200');
 assert(overCap.build.stats.STR === rf.statCeiling('STR', 200), 'which is exactly the ceiling');
 
 // An unaffordable floor fills as far as the budget allows and stops, rather
 // than overspending -- the UI reports this as a build that cannot equip.
-var broke = rf.solve({
-  objectiveName: 'Max MP', weapon: launcher, level: 12, budget: rf.totalStatPoints(12), cap: 425, floors: { STR: 400 }
+var broke = rf.solveGoals({
+  goalNames: ['Max MP'], weapon: launcher, level: 12, budget: rf.totalStatPoints(12), cap: 425, floors: { STR: 400 }
 });
 assert(broke.build.stats.STR < 400, 'an unaffordable floor is left unmet');
 assert(broke.build.spent <= rf.totalStatPoints(12), 'and never overspends the budget');
 
-// "Attack Power + Critical" must apply the floor to its pure-AP baseline too,
-// or the AP target it measures itself against would be unreachable.
-var comboFloored = rf.optimizeApPlusCritical(launcher, 250, budget250, { cap: 425, floors: strFloor });
-assert(comboFloored.stats.STR >= 158, 'the combined objective still meets the requirement');
-assert(
-  rf.attackPower(comboFloored.stats, launcher) >=
-    comboFloored.apPriorityInfo.apMax * rf.AP_CRITICAL_MIN_AP_FRACTION,
-  'and its Attack Power guarantee still holds against a floored baseline'
-);
+// A requirement binds every goal in a combination, not just the first.
+var multiFloored = rf.solveGoals({
+  goalNames: ['Max MP', 'Critical'], weapon: launcher, level: 250,
+  budget: budget250, cap: 425, floors: strFloor
+});
+assert(multiFloored.build.stats.STR >= 158, 'the requirement is met with several goals selected');
+assert(multiFloored.build.floorsCost === 2403, 'and costs the same 2403 points');
 
 // -- The optimizer never overspends, whatever the inputs ------------------
 
@@ -243,8 +289,8 @@ rf.OBJECTIVES.forEach(function (objective) {
   rf.WEAPONS.forEach(function (weapon) {
     [1, 7, 60, 130, 250].forEach(function (level) {
       var budget = rf.totalStatPoints(level);
-      var solved = rf.solve({
-        objectiveName: objective.name, weapon: weapon,
+      var solved = rf.solveGoals({
+        goalNames: [objective.name], weapon: weapon,
         level: level, budget: budget, cap: rf.DEFAULT_STAT_CAP
       });
       assert(solved.build.spent <= budget, objective.name + '/' + weapon.name + '/L' + level + ' stays in budget');
