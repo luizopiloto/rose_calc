@@ -1,10 +1,35 @@
-# ROSE Online — base status optimizer (web)
+# ROSE Online — base status optimizer
 
-Base status optimizer
+**https://luizopiloto.github.io/rose_calc/**
 
-Stat points get more expensive the higher a stat goes,
-so the best spread is rarely the obvious one.
-Pick a character and a goal, and this works out where every point should land. 
+Stat points get more expensive the higher a stat goes, so the best spread is
+rarely the obvious one. Pick a character and a goal, and this works out where
+every point should land.
+
+Base status only — no gear, no passives, no buffs.
+
+## What it does
+
+- **Up to three goals at once.** Tick them in the grid. Their coefficients run
+  from 0.5 to 5.5 per point, so they are combined by how close each gets to
+  what it could reach *alone* on the same budget, not by adding raw numbers.
+- **Weights**, because chasing everything evenly makes a build worse at all of
+  it. Defaults run Attack Power > DoT > Accuracy > Critical > the rest, and
+  every one is editable per build.
+- **Weapon status requirements.** A weapon you cannot equip is worth nothing,
+  so the stat it demands is bought first. The page says whether that cost you
+  anything, and warns when the budget cannot reach it.
+- **Confidence is visible.** Figures never confirmed on the live server carry a
+  dotted underline and explain themselves on hover.
+
+## Running it
+
+Open `index.html`. No build step, no backend, no package manager — jQuery and
+both typefaces are vendored, so it works offline straight off the filesystem.
+
+```
+node js/self-check.js     # ~11,000 assertions on the formulas and optimizer
+```
 
 ## Layout
 
@@ -12,76 +37,67 @@ Pick a character and a goal, and this works out where every point should land.
 index.html            the page
 css/rose.css          all styling
 css/fonts.css         @font-face for the vendored typefaces
-js/rose-formulas.js   the formulas and the optimizer -- no DOM, no jQuery
+js/rose-formulas.js   formulas and optimizer — no DOM, no jQuery
 js/app.js             control wiring and rendering
 js/self-check.js      assertions, runnable under node
 vendor/jquery-*.js    jQuery 3.7.1
 assets/fonts/         Fredoka and Barlow, latin + latin-ext subsets
-assets/logo.webp      masthead logo, resized from the original project's icon
-assets/favicon.png    favicon, same source
+assets/logo.webp      masthead logo
+assets/favicon.png    favicon
+assets/og.png         1200×630 link-preview card
 ```
 
 ## Where the numbers come from
 
-In short: Attack Power, the defences, Accuracy, Dodge,
-Critical and Critical Defence were measured on the live server by a player
-and pinned by a GM; the 425 stat cap and level 250 ceiling were confirmed by
-a GM; SP-per-level matches a player's reported total at level 130 exactly.
-HP/MP by class, the character creation values and the progressive cost
-formula come from classic/iROSE server reconstructions and are not confirmed
-for the current official server. The DoT coefficients rest on your own field
-testing alone.
+Not all of them are equally trustworthy, and the page says which is which.
 
-## Published at
+**Measured on the live server** (official forum, player-measured, GM-pinned):
+Attack Power per weapon type, Physical and Magic Defence, Accuracy, Dodge,
+Critical and Critical Defence. Also the 425 cap and the level 250 ceiling,
+confirmed by a GM, and SP-per-level, which matches a player's reported total at
+level 130 exactly.
 
-**https://luizopiloto.github.io/rose_calc/**
+**Field-tested, never written down:** DoT damage — a point of CHA and a point of
+Attack Power each give one. Weapon requirements sit on STR for Launcher, melee
+and Crossbow; DEX for Katar, Dual Wield and Bow; INT for Staff and Wand; CON
+for Gun.
 
-The site is plain static files with only relative links, so it runs unchanged
-from `file://`, from a project-site subpath, or from a domain root. There is
-no build step, so Pages serves the branch directly — no Actions workflow.
+**Barely sourced at all:** Heal Power, 5.5 per CHA and per INT, from one hedged
+forum post nobody answered. Community lore elsewhere claims CHA is worth about
+three times INT, which would change the build a lot — that comes from other
+servers, so it is left as an open conflict rather than blended in.
 
-`.nojekyll` is committed: nothing here needs Jekyll, and skipping it avoids
-any surprise filtering and makes deploys faster.
+**Not confirmed for this server:** HP and MP by class, and the character
+creation values, which come from older server reconstructions.
 
-### First deploy
+The goal weights are priorities, not measurements. Nothing about them comes
+from the game.
 
-```
-git remote add origin git@github.com:luizopiloto/rose_calc.git
-git push -u origin main
-```
+## Deployment
 
-Then in the repository: **Settings → Pages → Build and deployment**, set
-Source to "Deploy from a branch", branch `main`, folder `/ (root)`, Save.
-The first deploy takes a minute or two. The repository has to be public
-unless the account has GitHub Pro.
+Static files served straight from `main` — no Actions workflow. `.nojekyll` is
+committed because nothing here needs Jekyll.
 
-### If the URL ever changes
+The site's address appears in exactly three places, all in the `<head>` of
+`index.html`: the `canonical` link and the `og:url` and `og:image` tags. Every
+other path is relative, so moving the site — a rename, a user site, a custom
+domain — means editing those three and nothing else.
 
-The absolute URL appears in exactly three places, all in the `<head>` of
-`index.html`: the `canonical` link and the `og:url` and `og:image` meta tags.
-Nothing else in the project hardcodes a location. Renaming the repository, or
-moving to a `luizopiloto.github.io` user site, means editing those three and
-nothing more.
-
-`assets/og.png` is the 1200×630 link-preview card, rendered from a throwaway
-HTML file in the same palette and typefaces as the page itself. Regenerate it
-by hand if the title or artwork changes; it is not wired into any build.
+`assets/og.png` is rendered by hand from a throwaway HTML file in the page's own
+palette and typefaces. Regenerate it if the title or artwork changes.
 
 ## Licence
 
-MIT — see [`LICENSE`](LICENSE). That covers the code, the styling and the
-research notes in this repository.
-
-Two things it does not cover, both spelled out in
+MIT — see [`LICENSE`](LICENSE). Two things it does not cover, both detailed in
 [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md):
 
-- **The artwork.** The mole logo, favicon and link-preview card are original
-  drawings by luizopiloto, done after a ROSE Online monster. They are held back
-  from the MIT grant — fork the code freely, but swap the branding.
-- **The bundled library and fonts.** jQuery is MIT; Fredoka and Barlow are
-  under the SIL Open Font License 1.1, whose text and copyright notices ship
-  beside the fonts in [`assets/fonts/OFL.txt`](assets/fonts/OFL.txt) because
-  the OFL requires them to travel with any redistributed copy.
+- **The artwork.** The mole logo, favicon and preview card are original drawings
+  after a ROSE Online monster, held back from the MIT grant. Fork the code
+  freely, but swap the branding.
+- **The bundled library and fonts.** jQuery is MIT; Fredoka and Barlow are under
+  the SIL Open Font License 1.1, whose text ships beside the fonts in
+  [`assets/fonts/OFL.txt`](assets/fonts/OFL.txt) because the OFL requires it to
+  travel with any redistributed copy.
 
-This is an unofficial fan tool, not affiliated with or endorsed by the makers
-of ROSE Online.
+An unofficial fan tool, not affiliated with or endorsed by the makers of ROSE
+Online.
