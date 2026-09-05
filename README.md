@@ -120,8 +120,21 @@ nothing more.
 HTML file in the same palette and typefaces as the page itself. Regenerate it
 by hand if the title or artwork changes; it is not wired into any build.
 
-## Third-party
+## Licence
 
-- **jQuery 3.7.1** — MIT.
-- **Fredoka** and **Barlow** — SIL Open Font License 1.1. Subset to latin and
-  latin-ext and self-hosted so the page keeps its typography offline.
+MIT — see [`LICENSE`](LICENSE). That covers the code, the styling and the
+research notes in this repository.
+
+Two things it does not cover, both spelled out in
+[`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md):
+
+- **The artwork.** The mole logo, favicon and link-preview card are original
+  drawings by luizopiloto, done after a ROSE Online monster. They are held back
+  from the MIT grant — fork the code freely, but swap the branding.
+- **The bundled library and fonts.** jQuery is MIT; Fredoka and Barlow are
+  under the SIL Open Font License 1.1, whose text and copyright notices ship
+  beside the fonts in [`assets/fonts/OFL.txt`](assets/fonts/OFL.txt) because
+  the OFL requires them to travel with any redistributed copy.
+
+This is an unofficial fan tool, not affiliated with or endorsed by the makers
+of ROSE Online.
