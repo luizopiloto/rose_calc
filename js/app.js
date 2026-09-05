@@ -32,7 +32,7 @@
         'come from a different, older server’s code.',
     mp: 'The 4-per-INT part is confirmed on the live server. The class and ' +
         'level term is not, for the same reason as Max HP.',
-    dot: '1.0 per CHA and 0.6 per CON comes from your own field testing. The ' +
+    dot: '1.0 per CHA and 0.6 per CON comes from live server testing. The ' +
          'official forum confirms that Charm affects damage-over-time skills ' +
          'but has never put a number on it.'
   };
@@ -526,7 +526,7 @@
     if (chose('DoT Damage')) {
       notes.push({
         warn: true,
-        text: 'DoT Damage rests on the coefficients from your own testing — 1.0 per CHA and 0.6 per ' +
+        text: 'DoT Damage rests on the coefficients from live server testing — 1.0 per CHA and 0.6 per ' +
           'CON — and nothing else. Nobody has posted a number for them.'
       });
     }
