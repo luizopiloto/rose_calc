@@ -75,6 +75,17 @@ original had a dropdown holding both base goals and hand-built combinations
 ("Attack Power + DoT", "Attack Power + Critical"). This has a checkbox grid of
 the eleven base goals; tick up to three and they are optimized together.
 
+Each goal also carries a **weight**, because equal footing is not what a
+player wants — a build that chases three things evenly is worse at all three
+than one that knows what it came for. The defaults follow the priority
+*Attack Power > DoT Damage > Accuracy > Critical > everything else*: with
+Attack Power, DoT and Critical picked together, an even split leaves Attack
+Power at 74% of its solo reach, while the weighted default holds it at 88%.
+Only ratios matter, so a selection made entirely of bottom-rank goals still
+splits evenly between them. Every weight is editable per build in the panel;
+they are priorities, not measurements, and nothing about them comes from the
+game.
+
 Combining them is not a matter of adding coefficients. They run from 0.5 per
 point (Critical Defence) to 5.5 (Heal Power), so a raw sum would just hand
 every mixed build to whichever goal carries the biggest numbers. Each goal is

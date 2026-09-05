@@ -325,32 +325,44 @@
 
   var MAX_GOALS = 3;
 
+  // `weight` is how hard a goal pulls when it is combined with others, on top
+  // of the normalization in solveGoals. Equal weights split a build evenly,
+  // which costs the thing you actually came for: Attack Power, DoT, Accuracy
+  // and Critical together at 1.0 each drop Attack Power to about 74% of what
+  // it could reach alone. The user's ordering for those four is
+  // AP > DoT > Accuracy > Critical > everything else, and these defaults
+  // encode it. Only ratios matter, so a selection made entirely of 0.2 goals
+  // still splits evenly between them; the low value only bites when one of
+  // them is picked alongside a goal the ordering ranks higher. Every weight
+  // is adjustable per build in the UI -- these are the user's priorities, not
+  // measurements, and nothing about them comes from the game.
+
   var OBJECTIVES = [
     {
-      name: 'Attack Power',
+      name: 'Attack Power', weight: 1.0,
       note: 'Flat per weapon type; measured on the live server.',
       needsWeapon: true, confidence: 'measured'
     },
-    { name: 'Critical', note: '1.0 per SEN.', needsWeapon: false, confidence: 'measured' },
-    { name: 'Accuracy', note: '1.0 per CON.', needsWeapon: false, confidence: 'measured' },
+    { name: 'Critical', weight: 0.35, note: '1.0 per SEN.', needsWeapon: false, confidence: 'measured' },
+    { name: 'Accuracy', weight: 0.5, note: '1.0 per CON.', needsWeapon: false, confidence: 'measured' },
     {
-      name: 'DoT Damage', note: '1.0 per CHA, 0.6 per CON. Field-tested only.',
+      name: 'DoT Damage', weight: 0.7, note: '1.0 per CHA, 0.6 per CON. Field-tested only.',
       needsWeapon: false, confidence: 'unverified'
     },
-    { name: 'Physical Defence', note: '1.5 per STR.', needsWeapon: false, confidence: 'measured' },
-    { name: 'Magic Defence', note: '1.5 per INT.', needsWeapon: false, confidence: 'measured' },
-    { name: 'Dodge', note: '1.5 per DEX.', needsWeapon: false, confidence: 'measured' },
-    { name: 'Critical Defence', note: '0.5 per CHA.', needsWeapon: false, confidence: 'measured' },
+    { weight: 0.2, name: 'Physical Defence', note: '1.5 per STR.', needsWeapon: false, confidence: 'measured' },
+    { weight: 0.2, name: 'Magic Defence', note: '1.5 per INT.', needsWeapon: false, confidence: 'measured' },
+    { weight: 0.2, name: 'Dodge', note: '1.5 per DEX.', needsWeapon: false, confidence: 'measured' },
+    { weight: 0.2, name: 'Critical Defence', note: '0.5 per CHA.', needsWeapon: false, confidence: 'measured' },
     {
-      name: 'Max HP', note: '2 per STR, plus a class term this calculator can’t confirm.',
+      weight: 0.2, name: 'Max HP', note: '2 per STR, plus a class term this calculator can’t confirm.',
       needsWeapon: false, confidence: 'inherited'
     },
     {
-      name: 'Max MP', note: '4 per INT, plus a class term this calculator can’t confirm.',
+      weight: 0.2, name: 'Max MP', note: '4 per INT, plus a class term this calculator can’t confirm.',
       needsWeapon: false, confidence: 'inherited'
     },
     {
-      name: 'Heal Power', note: '5.5 per CHA and per INT. One hedged forum post, unconfirmed.',
+      weight: 0.2, name: 'Heal Power', note: '5.5 per CHA and per INT. One hedged forum post, unconfirmed.',
       needsWeapon: false, confidence: 'unverified'
     }
   ];
@@ -519,6 +531,11 @@
    * reach alone on the same budget, so every goal contributes a fraction of
    * its own maximum and they trade off on equal terms.
    *
+   * On top of that each goal carries a weight (see OBJECTIVES), because
+   * equal footing is not what a player wants: a build that chases four things
+   * evenly is worse at all four than one that knows which it came for. The
+   * weight multiplies the normalized contribution, so only ratios matter.
+   *
    * The build comes back with, per goal, how much of its solo maximum it
    * actually reached. That is the only honest way to show what picking more
    * than one goal gave up, and the UI leans on it.
@@ -535,16 +552,22 @@
     var cap = params.cap === undefined ? DEFAULT_STAT_CAP : params.cap;
     var floors = params.floors || null;
     var names = params.goalNames || [];
+    var weights = params.weights || {};
 
     var goals = [];
     names.forEach(function (name) {
       var coefficients = objectiveCoefficients(name, weapon);
       var tapers = objectiveTapers(name, weapon, level);
       var solo = optimize(coefficients, budget, { cap: cap, tapers: tapers, floors: floors });
+      var weight = weights[name];
+      if (typeof weight !== 'number' || !(weight >= 0)) {
+        weight = OBJECTIVES_BY_NAME[name] ? OBJECTIVES_BY_NAME[name].weight : 1;
+      }
       goals.push({
         name: name,
         coefficients: coefficients,
         tapers: tapers,
+        weight: weight,
         max: linearValue(coefficients, solo.stats)
       });
     });
@@ -554,8 +577,8 @@
     var wantsCritTaper = false;
 
     goals.forEach(function (goal) {
-      if (!(goal.max > 0)) return;   // nothing to scale against; see Unarmed
-      var scale = 1 / goal.max;
+      if (!(goal.max > 0) || !(goal.weight > 0)) return;   // see Unarmed
+      var scale = goal.weight / goal.max;
       STATS.forEach(function (stat) {
         var coefficient = goal.coefficients[stat] || 0;
         if (coefficient > 0) combined[stat] = (combined[stat] || 0) + coefficient * scale;
@@ -582,6 +605,7 @@
         name: goal.name,
         achieved: achieved,
         max: goal.max,
+        weight: goal.weight,
         fraction: goal.max > 0 ? achieved / goal.max : null
       };
     });

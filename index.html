@@ -64,6 +64,15 @@
         <p class="field-note" id="goalsNote"></p>
       </fieldset>
 
+      <div class="field weights-field" id="weightsField" hidden>
+        <span class="field-label">How much each matters</span>
+        <ul class="weights" id="weights"></ul>
+        <p class="field-note">
+          Relative only. A goal at 0.35 beside one at 1.00 rides along without
+          pulling the build apart; set them equal to split it evenly.
+        </p>
+      </div>
+
       <div class="field">
         <label class="field-label" for="job">Class</label>
         <select class="field-select" id="job"></select>
@@ -178,8 +187,8 @@
         <h3 class="section-title">How the goals traded off</h3>
         <p class="section-lede">
           Each goal against what it could have reached on its own with the same points.
-          Goals are balanced by that fraction, not by their raw numbers, which are on
-          wildly different scales.
+          Goals are balanced by that fraction rather than their raw numbers, which are on
+          wildly different scales, and then pulled by the weights on the left.
         </p>
         <ul class="scores" id="scores"></ul>
       </div>

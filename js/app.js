@@ -37,8 +37,15 @@
          'but has never put a number on it.'
   };
 
-  var $level, $levelSlider, $goals, $goalsNote, $job, $weapon, $cap, $budget,
+  var $level, $levelSlider, $goals, $goalsNote, $weights, $weightsField,
+      $job, $weapon, $cap, $budget,
       $budgetAuto, $reqValue, $reqStatLabel, $reqNote, $announcer;
+
+  // Weights the player has set, by goal name. Seeded from each goal's default
+  // the first time it is picked, then left alone so ticking a fourth goal and
+  // untickinging it does not quietly reset the others.
+  var goalWeights = {};
+  var lastGoalKey = null;
 
   var announceTimer = null;
   var hexTween = null;
@@ -114,6 +121,28 @@
 
   function readGoals() {
     return $goals.find('.goal-check:checked').map(function () { return this.value; }).get();
+  }
+
+  /* One weight box per picked goal. Rebuilt only when the selection itself
+   * changes, so typing in a box is not interrupted by its own keystrokes. */
+  function syncWeightControls(chosen) {
+    $weightsField.prop('hidden', chosen.length < 2);
+
+    var key = chosen.join('|');
+    if (key === lastGoalKey) return;
+    lastGoalKey = key;
+
+    $weights.html($.map(chosen, function (name) {
+      if (typeof goalWeights[name] !== 'number') {
+        goalWeights[name] = rf.OBJECTIVES_BY_NAME[name].weight;
+      }
+      return '<li class="weight">' +
+        '<span class="weight-name">' + esc(name) + '</span>' +
+        '<input class="field-number weight-input" type="number" min="0" max="2" step="0.05"' +
+        ' aria-label="Weight for ' + esc(name) + '"' +
+        ' data-goal="' + esc(name) + '" value="' + goalWeights[name].toFixed(2) + '">' +
+        '</li>';
+    }).join(''));
   }
 
   /* At the limit, the goals you have not picked stop being selectable rather
@@ -368,7 +397,8 @@
       }
       return '<li class="score">' +
         '<span>' +
-          '<span class="score-name">' + esc(score.name) + '</span>' +
+          '<span class="score-name">' + esc(score.name) +
+            '<span class="score-weight">weight ' + score.weight.toFixed(2) + '</span></span>' +
           '<span class="score-track">' +
             '<span class="score-fill" style="width:' + (score.fraction * 100).toFixed(2) + '%"></span>' +
           '</span>' +
@@ -509,7 +539,9 @@
       notes.push({
         text: 'Goals are balanced by how close each gets to its own solo maximum, not by adding their ' +
           'raw numbers together — those run from 0.5 per point to 5.5 per point, so a raw sum would ' +
-          'just hand the build to whichever goal has the biggest coefficients.'
+          'just hand the build to whichever goal has the biggest coefficients. The weights on the ' +
+          'left then decide which of them the build is really for; chasing everything evenly makes a ' +
+          'build worse at all of it.'
       });
     }
 
@@ -561,6 +593,7 @@
     syncGoalLimit(chosen);
     var goals = $.map(chosen, function (name) { return rf.OBJECTIVES_BY_NAME[name]; });
     var goalLabel = chosen.join(' + ');
+    syncWeightControls(chosen);
 
     $('#sheetObjective').text(chosen.length ? goalLabel : 'Nothing picked yet');
     $('#sheetCharacter').text('Level ' + level + ' ' + job.name + ' with ' +
@@ -583,6 +616,7 @@
 
     var params = {
       goalNames: chosen,
+      weights: goalWeights,
       weapon: weapon,
       level: level,
       budget: budget,
@@ -628,6 +662,8 @@
     $levelSlider = $('#levelSlider');
     $goals = $('#goals');
     $goalsNote = $('#goalsNote');
+    $weights = $('#weights');
+    $weightsField = $('#weightsField');
     $job = $('#job');
     $weapon = $('#weapon');
     $cap = $('#cap');
@@ -658,6 +694,12 @@
     $job.on('change', recalculate);
     $goals.on('change', '.goal-check', recalculate);
 
+    $weights.on('input change', '.weight-input', function () {
+      var value = parseFloat($(this).val());
+      goalWeights[$(this).data('goal')] = isNaN(value) || value < 0 ? 0 : Math.min(2, value);
+      recalculate();
+    });
+
     $weapon.on('change', function () {
       // The requirement belongs to the weapon. An amount typed for the last
       // one would otherwise carry over silently onto a different stat.
@@ -678,6 +720,8 @@
 
     $('#reset').on('click', function () {
       applyDefaults();
+      goalWeights = {};
+      lastGoalKey = null;
       $budget.prop('disabled', true);
       syncSliderFill();
       recalculate();

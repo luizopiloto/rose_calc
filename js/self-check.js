@@ -174,6 +174,60 @@ rf.STATS.forEach(function (stat) {
 
 assert(rf.MAX_GOALS === 3, 'three goals at a time');
 
+// -- Goal weights ---------------------------------------------------------
+
+// The user's priority order: AP > DoT > Accuracy > Critical > everything else.
+var W = function (name) { return rf.OBJECTIVES_BY_NAME[name].weight; };
+assert(W('Attack Power') > W('DoT Damage'), 'Attack Power outranks DoT');
+assert(W('DoT Damage') > W('Accuracy'), 'DoT outranks Accuracy');
+assert(W('Accuracy') > W('Critical'), 'Accuracy outranks Critical');
+rf.OBJECTIVES.forEach(function (goal) {
+  if (['Attack Power', 'DoT Damage', 'Accuracy', 'Critical'].indexOf(goal.name) === -1) {
+    assert(goal.weight < W('Critical'), goal.name + ' comes after the four that are ranked');
+  }
+});
+
+function scoreOf(result, name) {
+  return $filter(result.build.goalScores, function (s) { return s.name === name; })[0];
+}
+function $filter(list, fn) {
+  var out = []; list.forEach(function (x) { if (fn(x)) out.push(x); }); return out;
+}
+
+var offensive = ['Attack Power', 'DoT Damage', 'Critical'];
+function solveWeighted(weights) {
+  return rf.solveGoals({
+    goalNames: offensive, weights: weights, weapon: gun,
+    level: 250, budget: rf.totalStatPoints(250), cap: 425
+  });
+}
+
+// Weighting is what stops a combined build being mediocre at everything: the
+// whole point of the ordering is that Attack Power keeps most of its reach.
+var evenly = solveWeighted({ 'Attack Power': 1, 'DoT Damage': 1, 'Critical': 1 });
+var ranked = solveWeighted(null);
+assert(scoreOf(ranked, 'Attack Power').fraction > scoreOf(evenly, 'Attack Power').fraction,
+  'the default weights protect Attack Power against an even split');
+assert(scoreOf(ranked, 'Attack Power').fraction > 0.85,
+  'and keep it above 85% of what it could reach alone');
+
+// Only ratios matter, so scaling every weight leaves the build identical.
+var doubled = solveWeighted({ 'Attack Power': 2, 'DoT Damage': 1.4, 'Critical': 0.7 });
+rf.STATS.forEach(function (stat) {
+  assert(doubled.build.stats[stat] === ranked.build.stats[stat],
+    stat + ' is unchanged when every weight is doubled');
+});
+
+// Raising one goal's weight cannot lower its own share.
+var critHeavy = solveWeighted({ 'Attack Power': 1, 'DoT Damage': 0.7, 'Critical': 1 });
+assert(scoreOf(critHeavy, 'Critical').fraction > scoreOf(ranked, 'Critical').fraction,
+  'weighting Critical higher gets it more of the build');
+
+// A weight of zero drops the goal out without breaking the rest.
+var zeroed = solveWeighted({ 'Attack Power': 1, 'DoT Damage': 0.7, 'Critical': 0 });
+assert(scoreOf(zeroed, 'Critical').weight === 0, 'a zero weight is kept as zero');
+assert(zeroed.build.stats.SEN <= ranked.build.stats.SEN, 'and stops the build buying SEN for it');
+
 // -- Heal Power -----------------------------------------------------------
 
 // UNVERIFIED: one hedged forum post (ryle23, Aug 2023), never confirmed.
