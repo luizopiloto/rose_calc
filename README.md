@@ -1,13 +1,10 @@
 # ROSE Online — base status optimizer (web)
 
-A pure jQuery / HTML5 version of `../rose_base_calc`. No backend, no build
-step, no package manager. Open `index.html` in a browser and it works,
-including straight off the filesystem with no network — jQuery and both
-typefaces are vendored locally.
+Base status optimizer
 
-Same job as the PySide6 original: given a level, a goal, a class and a
-weapon, work out where a character's **base** stat points should go. Gear,
-passive skills and buffs are all out of scope.
+Stat points get more expensive the higher a stat goes,
+so the best spread is rarely the obvious one.
+Pick a character and a goal, and this works out where every point should land. 
 
 ## Layout
 
@@ -24,158 +21,9 @@ assets/logo.webp      masthead logo, resized from the original project's icon
 assets/favicon.png    favicon, same source
 ```
 
-`js/rose-formulas.js` is a direct port of `rose_formulas.py` and keeps the
-same split the original had: formulas in one file that knows nothing about
-the interface, wiring in another.
-
-## Checking the port
-
-`js/self-check.js` is a port of the `if __name__ == "__main__"` block at the
-bottom of `rose_formulas.py`, plus a sweep asserting the optimizer never
-overspends:
-
-```
-node js/self-check.js
-```
-
-The optimizer core is still checked directly against the Python: both
-`optimize()` implementations are swept over the nine goals the two projects
-still agree on, every weapon, five levels and four weapon-requirement settings
-(1,800 builds), comparing the stat spread, SP spent, SP left over, floor cost
-and objective value. All 1,800 agree exactly.
-
-The sweep runs with a cap high enough to never bind, because the two projects
-now disagree about what the cap means (see below) — that keeps the intended
-difference out of the comparison while still verifying everything else.
-
-Four things have no Python counterpart and are covered by `js/self-check.js`
-alone: the goal grid with its weights and normalized combination, the Heal
-Power goal, weapon status requirements on combined goals, and the corrected
-DoT formula (below).
-
-## What changed from the PySide6 version
-
-**Dropped: "Weapon attack" and "Ammo quality".** Those two inputs existed in
-the original only as permanently disabled widgets, kept so the form still
-looked complete in the Visual Python designer. There is no designer here, so
-carrying over two dead controls would have been porting the workaround
-rather than the feature. The reason they were dead is on the page instead:
-the confirmed Attack Power formula for this server is flat per stat point
-and does not scale with a weapon's own attack rating.
-
-**Added: how sure each number is.** The original printed everything into one
-monospace text box, with the caveats as trailing prose. Here, a figure that
-has never been confirmed on the live server carries a dotted gold underline
-and explains itself on hover — Max HP, Max MP and DoT damage. Everything
-without that mark comes from measurements players posted on the official
-forum. Nothing about the arithmetic changed; it is the same caveats the
-original text carried, moved next to the numbers they apply to.
-
-**Changed: pick up to three goals, not one combination from a list.** The
-original had a dropdown holding both base goals and hand-built combinations
-("Attack Power + DoT", "Attack Power + Critical"). This has a checkbox grid of
-the eleven base goals; tick up to three and they are optimized together.
-
-Each goal also carries a **weight**, because equal footing is not what a
-player wants — a build that chases three things evenly is worse at all three
-than one that knows what it came for. The defaults follow the priority
-*Attack Power > DoT Damage > Accuracy > Critical > everything else*: with
-Attack Power, DoT and Critical picked together, an even split leaves Attack
-Power at 74% of its solo reach, while the weighted default holds it at 88%.
-Only ratios matter, so a selection made entirely of bottom-rank goals still
-splits evenly between them. Every weight is editable per build in the panel;
-they are priorities, not measurements, and nothing about them comes from the
-game.
-
-Combining them is not a matter of adding coefficients. They run from 0.5 per
-point (Critical Defence) to 5.5 (Heal Power), so a raw sum would just hand
-every mixed build to whichever goal carries the biggest numbers. Each goal is
-divided by what it could reach alone on the same budget, so all of them
-contribute a fraction of their own maximum and trade off on equal terms. The
-page then shows each goal against its solo maximum, which is the only honest
-way to display what a combination gave up.
-
-This drops the old "Attack Power + Critical", which protected 99% of Attack
-Power and spent the slack on SEN. That answers a different question — "max AP,
-crit for free" rather than "balance these two" — and ticking both boxes now
-gives the balanced answer instead. `rose_formulas.py` still has the floor
-version if it is wanted back.
-
-**Fixed: DoT scales with Attack Power, not CON.** A point of CHA and a point
-of Attack Power each give one point of damage-over-time.
-
-The correction is a nice example of what this project keeps getting wrong in
-the same way. The original measurement was "about 0.6 DoT per CON", taken on
-an Artisan with a Launcher, and CON was written down as the cause. It isn't: a
-Launcher turns 1 CON into 0.55 Attack Power, and 0.55 is what that "about 0.6"
-actually was. The CON term was Attack Power all along, at one for one — which
-is why the coefficient is 1.0 rather than the 0.6 the measurement seemed to
-show.
-
-The consequence is that DoT is now weapon-dependent. CON feeds it only through
-a Gun's or Launcher's Attack Power; a Staff feeds it INT at 0.60 per point and
-CON not at all; Unarmed leaves the CHA term alone. `rose_formulas.py` still has
-the flat CON version.
-
-**Added: a Heal Power goal.** 5.5 per CHA and 5.5 per INT, and the least
-trustworthy number in the tool. It rests on one hedged post on the official
-forum (ryle23, Aug 2023: *"i think 1 cha = 5.5 heal points,,and prolly int
-gives around 5.5 heal points too.."*) which nobody answered, in the same thread
-whose author said only that "Heal Power from CHA will be added later" and never
-returned to it. Community lore elsewhere puts CHA at roughly three times INT
-for healing, which would change the build substantially — that claim traces to
-fansites and other servers, so it is recorded as an open conflict rather than
-blended into a number nobody measured. The page says all this when the goal is
-picked.
-
-**Fixed: what the 425 cap limits.** It caps the points you *put into* a stat,
-not the value the stat shows — so a stat tops out at its creation value plus
-425. STR, DEX, INT and CON reach 440; CHA and SEN start at 10 and reach 435.
-The ceiling is therefore per-stat, not a single shared number, and the hexagon
-draws each axis against its own.
-
-The forum wording this was originally built from — "425 is the max for a stat
-but that's only from adding stat points" — reads either way, and the earlier
-reading was wrong. It was settled from the live game, the same basis on which
-the measured Attack Power coefficients displaced the classic server's.
-`rose_formulas.py` still caps the value, so **the two projects now disagree
-here**; the Python needs the same correction if you want them aligned.
-
-**Added: weapon status requirements.** A weapon you cannot equip is worth
-nothing, so the status it demands is bought before anything is optimized. The
-optimizer always had the machinery for this — mandatory floors, ported from the
-Python — it just had no control wired to it.
-
-Which stat a weapon asks for is fixed by the weapon and built into the weapon
-table: STR for Launcher, melee and Crossbow; DEX for Katar, Dual Wield and Bow;
-INT for Staff and Wand; CON for Gun. That mapping is the user's, reported from
-the live game, and carries the same standing as the DoT coefficients — no
-written source. *How much* it asks for rises with the weapon's grade, so the
-amount stays an input: a level 250 Artisan's Launcher needs 158 STR. No
-confirmed table of amounts exists, and inventing one would be the kind of
-unsourced guess the rest of this project is careful to avoid.
-
-The page then says which of three things happened: the requirement cost nothing
-because the goal wanted that stat anyway, or it diverted a stated number of
-points away from the goal, or the budget could not reach it at all and the build
-cannot hold the weapon. Working out which takes a second solve without the
-requirement, for comparison.
-
-**Added: a level slider, and a hexagon.** The six stats are drawn against
-the stat cap and re-shape as inputs change. Optimal builds turn out to be
-spikes rather than balanced hexagons, which is the point.
-
-The allocation bars deliberately show the **share of the budget** each stat
-consumed rather than the stat's size. Raising a stat by one point costs its
-current value divided by five, rounded down, so a tall stat's last points
-cost many times what its first ones did — a bar showing stat size would hide
-exactly the thing this calculator exists to reason about.
-
 ## Where the numbers come from
 
-Unchanged from the original project — see `rose.md` (full research history
-and sourcing) and `formulas-build.md` (the formulas on their own) in
-`../rose_base_calc`. In short: Attack Power, the defences, Accuracy, Dodge,
+In short: Attack Power, the defences, Accuracy, Dodge,
 Critical and Critical Defence were measured on the live server by a player
 and pinned by a GM; the 425 stat cap and level 250 ceiling were confirmed by
 a GM; SP-per-level matches a player's reported total at level 130 exactly.
