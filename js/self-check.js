@@ -56,10 +56,19 @@ assert(
   'Gun AP coefficients are CON 0.50 / DEX 0.40 / SEN 0.10'
 );
 
-// A single stat can just barely reach the 425 cap on a maxed-out level 250
-// budget, with little to spare -- matches the forum's "just one stat can be
-// maxed" (Avatar, topic 979).
-var singleStatCost = rf.costBetween(15, 425);
+// The cap is on points put in, not on the value shown, so a stat tops out at
+// what it started with plus the cap. CHA and SEN start lower and so end lower.
+assert(rf.statCeiling('STR', 425) === 440, 'STR tops out at 15 + 425');
+assert(rf.statCeiling('CHA', 425) === 435, 'CHA tops out at 10 + 425');
+rf.STATS.forEach(function (stat) {
+  assert(rf.statCeiling(stat, 425) - rf.BASE_STATS[stat] === 425,
+    stat + ' can take exactly 425 added points');
+});
+
+// A single stat can just barely be filled on a maxed-out level 250 budget,
+// with little to spare -- matches the forum's "just one stat can be maxed"
+// (Avatar, topic 979).
+var singleStatCost = rf.costBetween(15, rf.statCeiling('STR', 425));
 console.log('\nSP to max one stat (15 -> 425): ' + singleStatCost);
 console.log('SP earned by level 250: ' + rf.totalStatPoints(250));
 assert(
@@ -93,7 +102,8 @@ assert(round(rf.criticalChance(lekoiStats, 250, 250), 2) === 40.71, 'crit chance
 var critCoefficients = rf.objectiveCoefficients('Critical', gun);
 var critTapers = rf.objectiveTapers('Critical', gun, 250);
 var normalBuild = rf.optimize(critCoefficients, rf.totalStatPoints(250), { tapers: critTapers });
-assert(normalBuild.stats.SEN === 425, 'global cap binds before the crit taper');
+assert(normalBuild.stats.SEN === rf.statCeiling('SEN', 425), 'the ceiling binds before the crit taper');
+assert(normalBuild.stats.SEN === 435, 'which for SEN is 435, not 425');
 assert(normalBuild.stats.SEN < critTapers.SEN.threshold, 'crit taper (1345) never reached');
 
 // But it does bind at a low level with an oversized manual SP budget, which
@@ -126,7 +136,7 @@ console.log(
 // maximising Critical Rating, not divide by zero.
 var unarmed = rf.WEAPONS_BY_NAME.Unarmed;
 var unarmedBuild = rf.optimizeApPlusCritical(unarmed, 250, rf.totalStatPoints(250), { cap: 425 });
-assert(unarmedBuild.stats.SEN === 425, 'Unarmed AP+Crit maximises Critical Rating');
+assert(unarmedBuild.stats.SEN === rf.statCeiling('SEN', 425), 'Unarmed AP+Crit maximises Critical Rating');
 
 // -- Equipment requirements (mandatory floors) ----------------------------
 
@@ -201,11 +211,13 @@ var trivial = rf.solve({
 assert(trivial.build.floorsCost === 0, 'a floor below the creation value costs nothing');
 assert(trivial.build.stats.INT === noFloor.build.stats.INT, 'and leaves the build untouched');
 
-// A floor above the stat cap is clamped to the cap, not chased past it.
+// A floor above what points can reach is clamped to the ceiling, not chased
+// past it -- and the ceiling is the creation value plus the cap, not the cap.
 var overCap = rf.solve({
   objectiveName: 'Max MP', weapon: launcher, level: 250, budget: budget250, cap: 200, floors: { STR: 300 }
 });
-assert(overCap.build.stats.STR === 200, 'a floor above the cap stops at the cap');
+assert(overCap.build.stats.STR === 215, 'a floor above the ceiling stops at 15 + 200');
+assert(overCap.build.stats.STR === rf.statCeiling('STR', 200), 'which is exactly the ceiling');
 
 // An unaffordable floor fills as far as the budget allows and stops, rather
 // than overspending -- the UI reports this as a build that cannot equip.
@@ -239,7 +251,10 @@ rf.OBJECTIVES.forEach(function (objective) {
       assert(solved.build.spent + solved.build.leftover === budget, 'spent + leftover === budget');
       rf.STATS.forEach(function (stat) {
         assert(solved.build.stats[stat] >= rf.BASE_STATS[stat], stat + ' never drops below its base');
-        assert(solved.build.stats[stat] <= rf.DEFAULT_STAT_CAP, stat + ' never exceeds the cap');
+        assert(solved.build.stats[stat] <= rf.statCeiling(stat, rf.DEFAULT_STAT_CAP),
+          stat + ' never exceeds its ceiling');
+        assert(solved.build.stats[stat] - rf.BASE_STATS[stat] <= rf.DEFAULT_STAT_CAP,
+          stat + ' never takes more than the cap in added points');
       });
     });
   });

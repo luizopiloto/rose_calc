@@ -51,10 +51,26 @@
   // topic 979, HoneyBuns (GM) + Avatar (Grandmaster), Dec 2022: "425 is max
   // stat." Supersedes rose-offline's 300 and osirose's 254, which are
   // classic/iROSE config values, not this server's.
+  //
+  // 425 caps the points you PUT IN, not the value the stat shows. So a stat
+  // tops out at its creation value plus 425 -- 440 for STR/DEX/INT/CON, 435
+  // for CHA/SEN -- and the ceiling differs per stat. The forum wording ("425
+  // is the max for a stat but that's only from adding stat points") reads
+  // either way; the user resolved it from the live game, which is the same
+  // basis on which the Attack Power coefficients beat the classic server's.
+  // NOTE: rose_formulas.py still caps the value, so this is a deliberate
+  // divergence from the Python, not a porting slip. See README.
   var DEFAULT_STAT_CAP = 425;
 
   // Same thread: "Max level is 250."
   var MAX_LEVEL = 250;
+
+  /* The highest `stat` can reach on base points alone. Measured from the
+   * character-creation value, because that is what the game counts as points
+   * put in -- not from whatever starting point a caller passes to optimize. */
+  function statCeiling(stat, cap) {
+    return BASE_STATS[stat] + (cap === undefined ? DEFAULT_STAT_CAP : cap);
+  }
 
   // --------------------------------------------------------------------
   // Stat point cost and budget
@@ -416,6 +432,9 @@
     var stats = {};
     STATS.forEach(function (stat) { stats[stat] = source[stat]; });
 
+    var ceilings = {};
+    STATS.forEach(function (stat) { ceilings[stat] = statCeiling(stat, cap); });
+
     var result = {
       stats: stats, budget: budget, spent: 0, leftover: 0,
       floorsCost: 0, value: 0, capped: [], apPriorityInfo: null
@@ -434,7 +453,7 @@
       Object.keys(floors)
         .sort(function (a, b) { return floors[a] - floors[b]; })
         .forEach(function (stat) {
-          var target = Math.min(floors[stat], cap);
+          var target = Math.min(floors[stat], ceilings[stat]);
           while (stats[stat] < target) {
             var cost = statCost(stats[stat]);
             if (cost > remaining) break;
@@ -448,7 +467,7 @@
     var pending = [];
     STATS.forEach(function (stat) {
       var coefficient = coefficients[stat] || 0;
-      if (coefficient > 0 && stats[stat] < cap) {
+      if (coefficient > 0 && stats[stat] < ceilings[stat]) {
         pending.push({ key: ratioKey(marginalValue(stat), statCost(stats[stat])), stat: stat });
       }
     });
@@ -459,7 +478,7 @@
       if (cost > remaining) continue;   // and never affordable again
       stats[stat] += 1;
       remaining -= cost;
-      if (stats[stat] >= cap) {
+      if (stats[stat] >= ceilings[stat]) {
         result.capped.push(stat);
         continue;
       }
@@ -592,6 +611,7 @@
     AP_COEFFICIENTS: AP_COEFFICIENTS,
     OBJECTIVES: OBJECTIVES,
     OBJECTIVES_BY_NAME: OBJECTIVES_BY_NAME,
+    statCeiling: statCeiling,
     statCost: statCost,
     cumulativeCost: cumulativeCost,
     costBetween: costBetween,

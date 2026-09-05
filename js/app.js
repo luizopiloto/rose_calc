@@ -185,7 +185,7 @@
       $labels.append(name);
 
       var untouched = stats[stat] === rf.BASE_STATS[stat];
-      var tip = vertex(index, Math.min(1, stats[stat] / cap));
+      var tip = vertex(index, Math.min(1, stats[stat] / rf.statCeiling(stat, cap)));
       $labels.append(svgEl('circle', {
         cx: tip.x, cy: tip.y, r: untouched ? 2.5 : 4,
         'class': 'hexagon-dot' + (untouched ? ' is-untouched' : '')
@@ -202,7 +202,7 @@
 
   function drawHexagon(stats, cap) {
     var target = $.map(STAT_ORDER, function (stat) {
-      return Math.min(1, stats[stat] / cap);
+      return Math.min(1, stats[stat] / rf.statCeiling(stat, cap));
     });
     var $shape = $('#hexShape');
 
@@ -262,7 +262,7 @@
       var spent = rf.costBetween(base, final);
       var share = build.spent > 0 ? (spent / build.spent) * 100 : 0;
       var untouched = final === base;
-      var capped = final >= cap;
+      var capped = final >= rf.statCeiling(stat, cap);
 
       var classes = 'alloc-row' +
         (untouched ? ' is-untouched' : '') +
@@ -395,12 +395,13 @@
       var stat = requirement.stat;
       var needed = requirement.needed;
 
-      if (needed > cap) {
+      if (needed > rf.statCeiling(stat, cap)) {
         notes.push({
           warn: true,
-          text: 'The weapon needs ' + fmt(needed) + ' ' + stat + ', above the stat cap of ' + fmt(cap) +
-            '. Base points alone cannot get there — on the live server a class passive or gear would ' +
-            'have to cover the difference, and this calculator models neither.'
+          text: 'The weapon needs ' + fmt(needed) + ' ' + stat + ', and base points can only reach ' +
+            fmt(rf.statCeiling(stat, cap)) + ' — ' + fmt(rf.BASE_STATS[stat]) + ' at creation plus the ' +
+            fmt(cap) + ' points you can put in. On the live server a class passive or gear would have to ' +
+            'cover the difference, and this calculator models neither.'
         });
       } else if (requirement.reached < needed) {
         notes.push({
@@ -429,8 +430,8 @@
       notes.push({
         warn: true,
         text: fmt(build.leftover) + ' stat ' + (build.leftover === 1 ? 'point' : 'points') +
-          ' cannot be spent: every stat that helps this goal is either at the cap of ' +
-          fmt(cap) + ' or costs more than what is left.'
+          ' cannot be spent: every stat that helps this goal has taken all ' + fmt(cap) +
+          ' points it can hold, or costs more than what is left.'
       });
     }
 
@@ -459,7 +460,9 @@
 
     notes.push({
       text: 'Every build starts from STR 15, DEX 15, INT 15, CON 15, CHA 10, SEN 10. Those creation ' +
-        'values come from an older server’s database schema, not from anything confirmed here.'
+        'values come from an older server’s database schema, not from anything confirmed here. The cap ' +
+        'of ' + fmt(cap) + ' limits the points you add on top, so STR, DEX, INT and CON top out at ' +
+        fmt(rf.statCeiling('STR', cap)) + ' while CHA and SEN reach ' + fmt(rf.statCeiling('CHA', cap)) + '.'
     });
 
     notes.push({

@@ -38,16 +38,22 @@ overspends:
 node js/self-check.js
 ```
 
-The port was also checked directly against the Python. Both implementations
-were run over the full cross-product of 12 objectives × 10 weapons ×
-11 levels × 4 stat caps (5,280 builds), comparing the stat spread, SP spent,
-SP left over, which stats hit the cap, and every derived stat — all 5,280
-agree exactly. A second sweep added weapon requirements (6,700 builds, 4,400
-of them with a requirement that actually cost points) and also agrees exactly.
+The port was also checked directly against the Python, sweeping both
+implementations over the cross-product of objectives, weapons, levels, stat
+caps and weapon requirements (6,700 builds, 4,400 of them with a requirement
+that actually cost points) and comparing the stat spread, SP spent, SP left
+over, which stats hit their ceiling, and every derived stat. All 6,700 agree
+exactly.
 
-One path has no Python counterpart: `rose_formulas.py`'s
-`optimize_ap_plus_critical` takes no floors argument, so requirements on that
-one objective are covered by `js/self-check.js` rather than by comparison.
+Two things that comparison cannot cover, both checked by `js/self-check.js`
+instead:
+
+- **The stat cap means something different here**, deliberately — see below.
+  The parity sweep therefore runs with a cap high enough to never bind in
+  either implementation, which verifies everything else about the port while
+  leaving the one intended difference out of the comparison.
+- `rose_formulas.py`'s `optimize_ap_plus_critical` takes no floors argument,
+  so weapon requirements on that one objective have no Python counterpart.
 
 ## What changed from the PySide6 version
 
@@ -66,6 +72,19 @@ and explains itself on hover — Max HP, Max MP and DoT damage. Everything
 without that mark comes from measurements players posted on the official
 forum. Nothing about the arithmetic changed; it is the same caveats the
 original text carried, moved next to the numbers they apply to.
+
+**Fixed: what the 425 cap limits.** It caps the points you *put into* a stat,
+not the value the stat shows — so a stat tops out at its creation value plus
+425. STR, DEX, INT and CON reach 440; CHA and SEN start at 10 and reach 435.
+The ceiling is therefore per-stat, not a single shared number, and the hexagon
+draws each axis against its own.
+
+The forum wording this was originally built from — "425 is the max for a stat
+but that's only from adding stat points" — reads either way, and the earlier
+reading was wrong. It was settled from the live game, the same basis on which
+the measured Attack Power coefficients displaced the classic server's.
+`rose_formulas.py` still caps the value, so **the two projects now disagree
+here**; the Python needs the same correction if you want them aligned.
 
 **Added: weapon status requirements.** A weapon you cannot equip is worth
 nothing, so the status it demands is bought before anything is optimized. The

@@ -87,12 +87,13 @@
 
       <div class="field">
         <div class="field-head">
-          <label class="field-label" for="cap">Stat cap</label>
+          <label class="field-label" for="cap">Max points per stat</label>
           <input class="field-number" type="number" id="cap" min="50" max="500" step="1" value="425">
         </div>
         <p class="field-note">
-          The most a single base stat can reach. 425 on the live server; class
-          passives can push a main stat past it, which this ignores.
+          The most you can put into one stat. 425 on the live server — on top of
+          what the stat started at, so STR tops out at 440 and CHA at 435. Class
+          passives push a main stat further, which this ignores.
         </p>
       </div>
 
@@ -130,7 +131,7 @@
             <polygon class="hexagon-shape" id="hexShape" points=""></polygon>
             <g class="hexagon-labels" id="hexLabels"></g>
           </svg>
-          <figcaption class="hexagon-caption">Each corner runs from 0 to the stat cap.</figcaption>
+          <figcaption class="hexagon-caption">Each corner runs from 0 to the most that stat can reach.</figcaption>
         </figure>
 
         <div class="ledger">
