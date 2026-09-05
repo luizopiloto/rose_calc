@@ -39,18 +39,19 @@ node js/self-check.js
 ```
 
 The optimizer core is still checked directly against the Python: both
-`optimize()` implementations are swept over the ten goals the two projects
-share, every weapon, five levels and four weapon-requirement settings (2,000
-builds), comparing the stat spread, SP spent, SP left over, floor cost and
-objective value. All 2,000 agree exactly.
+`optimize()` implementations are swept over the nine goals the two projects
+still agree on, every weapon, five levels and four weapon-requirement settings
+(1,800 builds), comparing the stat spread, SP spent, SP left over, floor cost
+and objective value. All 1,800 agree exactly.
 
 The sweep runs with a cap high enough to never bind, because the two projects
 now disagree about what the cap means (see below) — that keeps the intended
 difference out of the comparison while still verifying everything else.
 
-Three things have no Python counterpart and are covered by `js/self-check.js`
-alone: the goal grid and its normalized combination, the Heal Power goal, and
-weapon status requirements on combined goals.
+Four things have no Python counterpart and are covered by `js/self-check.js`
+alone: the goal grid with its weights and normalized combination, the Heal
+Power goal, weapon status requirements on combined goals, and the corrected
+DoT formula (below).
 
 ## What changed from the PySide6 version
 
@@ -99,6 +100,22 @@ Power and spent the slack on SEN. That answers a different question — "max AP,
 crit for free" rather than "balance these two" — and ticking both boxes now
 gives the balanced answer instead. `rose_formulas.py` still has the floor
 version if it is wanted back.
+
+**Fixed: DoT scales with Attack Power, not CON.** A point of CHA and a point
+of Attack Power each give one point of damage-over-time.
+
+The correction is a nice example of what this project keeps getting wrong in
+the same way. The original measurement was "about 0.6 DoT per CON", taken on
+an Artisan with a Launcher, and CON was written down as the cause. It isn't: a
+Launcher turns 1 CON into 0.55 Attack Power, and 0.55 is what that "about 0.6"
+actually was. The CON term was Attack Power all along, at one for one — which
+is why the coefficient is 1.0 rather than the 0.6 the measurement seemed to
+show.
+
+The consequence is that DoT is now weapon-dependent. CON feeds it only through
+a Gun's or Launcher's Attack Power; a Staff feeds it INT at 0.60 per point and
+CON not at all; Unarmed leaves the CHA term alone. `rose_formulas.py` still has
+the flat CON version.
 
 **Added: a Heal Power goal.** 5.5 per CHA and 5.5 per INT, and the least
 trustworthy number in the tool. It rests on one hedged post on the official

@@ -174,6 +174,44 @@ rf.STATS.forEach(function (stat) {
 
 assert(rf.MAX_GOALS === 3, 'three goals at a time');
 
+// -- DoT damage -----------------------------------------------------------
+
+// UNVERIFIED, from live server testing: a point of CHA and a point of Attack
+// Power each give one point of DoT. The second term is Attack Power, not CON,
+// so this goal depends on the weapon.
+var dotStats = { STR: 15, DEX: 15, INT: 15, CON: 408, CHA: 200, SEN: 85 };
+assert(rf.dotDamage(dotStats, gun) === 200 + rf.attackPower(dotStats, gun),
+  'DoT is CHA plus the Attack Power the page shows');
+
+var dotGun = rf.dotCoefficients(gun);
+assert(dotGun.CHA === 1.0, 'CHA is worth a full point of DoT');
+assert(dotGun.CON === 0.50, 'CON reaches DoT only through Gun Attack Power');
+assert(dotGun.DEX === 0.40, 'and so does DEX');
+assert(dotGun.STR === undefined, 'STR does nothing for DoT with a Gun');
+
+// The measurement this came from: about 0.6 DoT per CON on an Artisan with a
+// Launcher. That is the Launcher's own CON-to-Attack-Power coefficient, which
+// is what identified Attack Power as the real term and pinned it at one to
+// one -- at 0.6 per Attack Power it would have been 0.33 per CON instead.
+function dotPerCon(weapon, from, to) {
+  function at(con) { return rf.dotDamage({ STR: 15, DEX: 15, INT: 15, CON: con, CHA: 10, SEN: 10 }, weapon); }
+  return (at(to) - at(from)) / (to - from);
+}
+assert(Math.abs(dotPerCon(rf.WEAPONS_BY_NAME.Launcher, 100, 200) - 0.55) < 1e-9,
+  'a Launcher gives 0.55 DoT per CON, which is the ~0.6 that was measured');
+assert(Math.abs(dotPerCon(gun, 100, 200) - 0.50) < 1e-9, 'a Gun gives 0.50');
+
+// A different weapon gives the same goal different coefficients.
+var dotStaff = rf.dotCoefficients(rf.WEAPONS_BY_NAME.Staff);
+assert(dotStaff.INT === 0.60, 'a Staff routes INT into DoT');
+assert(dotStaff.CON === undefined, 'and CON does nothing for it');
+assert(rf.OBJECTIVES_BY_NAME['DoT Damage'].needsWeapon === true, 'so DoT needs a weapon');
+
+// Unarmed has no Attack Power, so only the CHA term survives.
+var dotUnarmed = rf.dotCoefficients(rf.WEAPONS_BY_NAME.Unarmed);
+assert(dotUnarmed.CHA === 1.0 && Object.keys(dotUnarmed).length === 1,
+  'Unarmed DoT is the CHA term alone');
+
 // -- Goal weights ---------------------------------------------------------
 
 // The user's priority order: AP > DoT > Accuracy > Critical > everything else.

@@ -286,11 +286,39 @@
     return Math.max(0, Math.min(raw, CRIT_CHANCE_CAP_PERCENT));
   }
 
-  /* UNVERIFIED. 1.0 * CHA + 0.6 * CON, from the user's own field testing.
-   * topic 3354 confirms only that CHA affects Critical Defense; a separate
-   * thread asking about CHA/DoT scaling got no numeric answer. */
-  function dotDamage(stats) {
-    return stats.CHA * 1.0 + stats.CON * 0.6;
+  /* UNVERIFIED, from live server testing: a point of CHA and a point of
+   * Attack Power are each worth one point of damage-over-time.
+   *
+   * How that was settled is worth keeping, because the first version of it
+   * was wrong. The measurement was "about 0.6 DoT per CON", taken on an
+   * Artisan with a Launcher, and CON was written down as the cause. It isn't:
+   * a Launcher turns 1 CON into 0.55 Attack Power, and 0.55 is what that
+   * "about 0.6" actually was. So the CON term was Attack Power all along, at
+   * one for one -- which is why the coefficient below is 1.0 and not 0.6.
+   *
+   * The consequence is that this goal now depends on the weapon. CON reaches
+   * DoT only through a Gun's or Launcher's Attack Power; on a Staff it is INT
+   * that feeds it, and Unarmed leaves the CHA term alone.
+   *
+   * topic 3354 confirms only that CHA affects Critical Defense, and a thread
+   * asking about CHA/DoT scaling got no numeric answer, so none of this has
+   * written confirmation. Uses the same truncated Attack Power the page
+   * shows, so the figure can be checked by hand against the one above it. */
+  function dotDamage(stats, weapon) {
+    return stats.CHA * 1.0 + attackPower(stats, weapon);
+  }
+
+  /* Marginal DoT per stat point: the CHA term plus the weapon's own Attack
+   * Power coefficients, one for one. Linear in the stats, as Attack Power is. */
+  function dotCoefficients(weapon) {
+    var coefficients = {};
+    var ap = attackPowerCoefficients(weapon);
+    STATS.forEach(function (stat) {
+      var value = ap[stat] || 0;
+      if (stat === 'CHA') value += 1.0;
+      if (value > 0) coefficients[stat] = value;
+    });
+    return coefficients;
   }
 
   /* UNVERIFIED, and the weakest number in this module. 5.5 per CHA and 5.5
@@ -346,8 +374,10 @@
     { name: 'Critical', weight: 0.35, note: '1.0 per SEN.', needsWeapon: false, confidence: 'measured' },
     { name: 'Accuracy', weight: 0.5, note: '1.0 per CON.', needsWeapon: false, confidence: 'measured' },
     {
-      name: 'DoT Damage', weight: 0.7, note: '1.0 per CHA, 0.6 per CON. Field-tested only.',
-      needsWeapon: false, confidence: 'unverified'
+      name: 'DoT Damage', weight: 0.7,
+      note: 'A point of CHA and a point of Attack Power each give one. The weapon ' +
+        'therefore matters. Field-tested only.',
+      needsWeapon: true, confidence: 'unverified'
     },
     { weight: 0.2, name: 'Physical Defence', note: '1.5 per STR.', needsWeapon: false, confidence: 'measured' },
     { weight: 0.2, name: 'Magic Defence', note: '1.5 per INT.', needsWeapon: false, confidence: 'measured' },
@@ -370,6 +400,8 @@
   var OBJECTIVES_BY_NAME = {};
   OBJECTIVES.forEach(function (o) { OBJECTIVES_BY_NAME[o.name] = o; });
 
+  // 'Attack Power' and 'DoT Damage' are weapon-dependent and handled in
+  // objectiveCoefficients() rather than listed here.
   var FLAT_OBJECTIVE_COEFFICIENTS = {
     'Heal Power': { CHA: 5.5, INT: 5.5 },
     'Max HP': { STR: 2.0 },
@@ -379,14 +411,16 @@
     'Accuracy': { CON: 1.0 },
     'Dodge': { DEX: 1.5 },
     'Critical': { SEN: 1.0 },
-    'Critical Defence': { CHA: 0.5 },
-    'DoT Damage': { CHA: 1.0, CON: 0.6 }
+    'Critical Defence': { CHA: 0.5 }
   };
 
   /* Marginal value of one point in each stat, for one goal on its own. */
   function objectiveCoefficients(objectiveName, weapon) {
     if (objectiveName === 'Attack Power') {
       return attackPowerCoefficients(weapon);
+    }
+    if (objectiveName === 'DoT Damage') {
+      return dotCoefficients(weapon);
     }
     var flat = FLAT_OBJECTIVE_COEFFICIENTS[objectiveName];
     var copy = {};
@@ -649,6 +683,7 @@
     criticalRatingForChanceCap: criticalRatingForChanceCap,
     criticalChance: criticalChance,
     dotDamage: dotDamage,
+    dotCoefficients: dotCoefficients,
     healPower: healPower,
     objectiveCoefficients: objectiveCoefficients,
     objectiveTapers: objectiveTapers,

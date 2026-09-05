@@ -32,9 +32,10 @@
         'come from a different, older server’s code.',
     mp: 'The 4-per-INT part is confirmed on the live server. The class and ' +
         'level term is not, for the same reason as Max HP.',
-    dot: '1.0 per CHA and 0.6 per CON comes from live server testing. The ' +
-         'official forum confirms that Charm affects damage-over-time skills ' +
-         'but has never put a number on it.'
+    dot: 'A point of CHA and a point of Attack Power each give one point of ' +
+         'damage-over-time, from live server testing. The official forum ' +
+         'confirms that Charm affects damage-over-time skills but has never ' +
+         'put a number on it.'
   };
 
   var $level, $levelSlider, $goals, $goalsNote, $weights, $weightsField,
@@ -378,7 +379,7 @@
         aside: 'against a target with no Critical Defence'
       }),
       resultItem('Critical Defence', rf.criticalDefense(stats).toFixed(1)),
-      resultItem('DoT damage', rf.dotDamage(stats).toFixed(1), { provisional: PROVISIONAL.dot })
+      resultItem('DoT damage', rf.dotDamage(stats, weapon).toFixed(1), { provisional: PROVISIONAL.dot })
     ];
     $('#results').html(items.join(''));
   }
@@ -519,15 +520,18 @@
       });
     }
 
-    if (weapon.kind === 'crossbow' && chose('Attack Power')) {
+    // DoT is 0.6 of Attack Power, so a disputed AP coefficient reaches it too.
+    if (weapon.kind === 'crossbow' && (chose('Attack Power') || chose('DoT Damage'))) {
       notes.push({ warn: true, text: rf.CROSSBOW_DISPUTE_NOTE });
     }
 
     if (chose('DoT Damage')) {
       notes.push({
         warn: true,
-        text: 'DoT Damage rests on the coefficients from live server testing — 1.0 per CHA and 0.6 per ' +
-          'CON — and nothing else. Nobody has posted a number for them.'
+        text: 'DoT Damage rests on live server testing and nothing else — a point of CHA and a point ' +
+          'of Attack Power each give one. Nobody has posted a number for it. Because the second term ' +
+          'is Attack Power, the weapon changes this goal: CON feeds it only through a Gun’s or ' +
+          'Launcher’s Attack Power, a Staff feeds it INT instead, and Unarmed leaves only the CHA part.'
       });
     }
 
