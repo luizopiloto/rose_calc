@@ -749,7 +749,17 @@
       recalculate();
     });
 
-    $job.on('change', recalculate);
+    $job.on('change', function () {
+      // Every class is built around one weapon, so picking a class picks it.
+      // Nothing is locked afterwards: the weapon box stays free, and a
+      // Knight holding a Spear is a build this page will happily work out.
+      var picked = rf.signatureWeapon(rf.JOBS_BY_NAME[$(this).val()]);
+      if (picked && picked.name !== $weapon.val()) {
+        $weapon.val(picked.name);
+        $reqValue.val(0);   // the requirement belongs to the weapon
+      }
+      recalculate();
+    });
     $goals.on('change', '.goal-check', recalculate);
 
     $weights.on('input change', '.weight-input', function () {

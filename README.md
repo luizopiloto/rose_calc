@@ -68,7 +68,8 @@ player's reported total at level 130 exactly.
 **Field-tested, never written down:** DoT damage — a point of CHA and a point of
 Attack Power each give one. Weapon requirements sit on STR for Launcher, melee
 and Crossbow; DEX for Katar, Dual Wield and Bow; INT for Staff and Wand; CON
-for Gun.
+for Gun. Also the weapon each class is built around, which the page picks
+when you pick a class — a starting point, not a restriction.
 
 **Barely sourced at all:** Heal Power, 5.5 per CHA and per INT, from one hedged
 forum post nobody answered. Community lore elsewhere claims CHA is worth about

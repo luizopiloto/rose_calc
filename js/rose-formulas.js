@@ -190,6 +190,37 @@
   var WEAPONS_BY_NAME = {};
   WEAPONS.forEach(function (w) { WEAPONS_BY_NAME[w.name] = w; });
 
+  // The weapon a class is built around. No formula depends on this -- it
+  // only saves picking the obvious weapon by hand after picking a class,
+  // and the weapon stays free to change afterwards. A class can hold
+  // anything its job allows; this is the one it is known for. Reported by
+  // the user from the live server, the same standing as `requires` above.
+  var SIGNATURE_WEAPONS = {
+    Visitor: 'none',
+    Soldier: 'melee',
+    Knight: 'crossbow',
+    Champion: 'melee',          // the melee entry is the one listing Spear
+    Muse: 'staff',
+    Mage: 'staff',
+    Cleric: 'wand',
+    Hawker: 'dualwield',
+    Raider: 'katar',
+    Scout: 'bow',
+    Dealer: 'gun',
+    Bourgeois: 'launcher',
+    Artisan: 'gun'
+  };
+
+  /* Keyed by kind rather than by name so the long melee label -- which is a
+   * list of weapons, not one weapon -- lives in exactly one place. */
+  function signatureWeapon(jobRecord) {
+    var kind = SIGNATURE_WEAPONS[jobRecord.name];
+    for (var i = 0; i < WEAPONS.length; i++) {
+      if (WEAPONS[i].kind === kind) return WEAPONS[i];
+    }
+    return null;
+  }
+
   // topic 3354, Vile, Jan 2023: "before Passives and Gear. Base values
   // only" -- exactly this module's scope. Flat AP per stat point; unlike
   // the classic/iROSE formula there is no weapon-attack-value term, so a
@@ -888,6 +919,7 @@
     JOBS_BY_NAME: JOBS_BY_NAME,
     WEAPONS: WEAPONS,
     WEAPONS_BY_NAME: WEAPONS_BY_NAME,
+    signatureWeapon: signatureWeapon,
     AP_COEFFICIENTS: AP_COEFFICIENTS,
     OBJECTIVES: OBJECTIVES,
     OBJECTIVES_BY_NAME: OBJECTIVES_BY_NAME,

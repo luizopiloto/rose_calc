@@ -53,6 +53,26 @@ var artisan = rf.JOBS_BY_NAME.Artisan;
 assert(rf.maxHp(artisan, 250, 25) === 2866, 'maxHp(Artisan, 250, 25) === 2866');
 assert(rf.maxMp(artisan, 250, 25) === 1225, 'maxMp(Artisan, 250, 25) === 1225');
 
+// -- The weapon a class is built around -------------------------------------
+
+// User-reported from the live server. Every class must name one, and it must
+// be a weapon the page actually offers -- a typo here would silently leave
+// the weapon box on whatever the last class chose.
+var signatures = {
+  Artisan: 'Gun', Bourgeois: 'Launcher', Cleric: 'Wand', Mage: 'Staff',
+  Raider: 'Katar', Knight: 'Crossbow (Bowgun)', Scout: 'Bow',
+  Champion: '1H Sword/Blunt, Great Sword, Spear, Axe'
+};
+rf.JOBS.forEach(function (j) {
+  var weapon = rf.signatureWeapon(j);
+  assert(weapon !== null, j.name + ' names a signature weapon');
+  assert(rf.WEAPONS_BY_NAME[weapon.name] === weapon,
+    j.name + ' signature weapon is one the page offers');
+  if (signatures[j.name]) {
+    assert(weapon.name === signatures[j.name], j.name + ' carries a ' + signatures[j.name]);
+  }
+});
+
 // -- Attack Power ----------------------------------------------------------
 
 var gun = rf.WEAPONS_BY_NAME.Gun;
