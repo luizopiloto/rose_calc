@@ -10,7 +10,7 @@ travel with any copy you distribute.
 | [jQuery 3.7.1](https://jquery.com/) | MIT | every DOM interaction in `js/app.js` |
 | [Fredoka](https://github.com/hafontia/Fredoka) | SIL OFL 1.1 | display type, headings and stat numerals |
 | [Barlow](https://github.com/jpt/barlow) | SIL OFL 1.1 | body text and tabular figures |
-| The mole logo, favicon and preview card | **not MIT** — see below | branding |
+| The moldie logo, favicon and preview card | **not MIT** — see below | branding |
 
 Everything is vendored rather than loaded from a CDN, so the page keeps working
 with no network. That also means these files are redistributed, which is why
