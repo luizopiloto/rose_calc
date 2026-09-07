@@ -60,6 +60,12 @@
     return Number(value).toLocaleString('en-US');
   }
 
+  /* "STR +4", "STR +277 and DEX +3", "STR +2, CHA +2 and SEN +1". */
+  function listPhrase(items) {
+    if (items.length < 2) return items.join('');
+    return items.slice(0, -1).join(', ') + ' and ' + items[items.length - 1];
+  }
+
   function esc(value) {
     return String(value)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -313,25 +319,35 @@
   }
 
   function renderAllocation(build, cap, requirement) {
+    var filled = build.filled || {};
     var rows = $.map(STAT_ORDER, function (stat) {
       var required = requirement && requirement.stat === stat ? requirement.needed : 0;
       var base = rf.BASE_STATS[stat];
       var final = build.stats[stat];
       var gain = final - base;
+      var spare = filled[stat] || 0;
       var spent = rf.costBetween(base, final);
       var share = build.spent > 0 ? (spent / build.spent) * 100 : 0;
       var untouched = final === base;
       var capped = final >= rf.statCeiling(stat, cap);
+      // Points the goal had no use for, parked here so none go to waste. It
+      // reads as part of the gain rather than as another tag on the end --
+      // "(+277, 134 spare)" says what "(+277)" plus a badge has to spell out.
+      var gainText = !gain ? '' :
+        '+' + fmt(gain) + (spare === gain ? ' spare' : spare ? ', ' + fmt(spare) + ' spare' : '');
 
       var classes = 'alloc-row' +
         (untouched ? ' is-untouched' : '') +
-        (capped ? ' is-capped' : '');
+        (capped ? ' is-capped' : '') +
+        (spare === gain && spare > 0 ? ' is-spare' : '');
 
       return '<li class="' + classes + '">' +
         '<span class="alloc-stat">' + stat + '</span>' +
-        '<span class="alloc-values">' + base + ' &rarr; ' +
-          '<span class="alloc-final">' + final + '</span>' +
-          (gain ? ' <span class="alloc-gain">(+' + fmt(gain) + ')</span>' : '') +
+        '<span class="alloc-values">' +
+          '<span class="alloc-move">' + base + ' &rarr; ' +
+            '<span class="alloc-final">' + final + '</span>' +
+            (gainText ? ' <span class="alloc-gain">(' + gainText + ')</span>' : '') +
+          '</span>' +
           (required ? ' <span class="alloc-req-note">needs ' + fmt(required) + '</span>' : '') +
           (capped ? ' <span class="alloc-cap-note">at cap</span>' : '') +
         '</span>' +
@@ -484,28 +500,58 @@
             ' and only reaches ' + fmt(requirement.reached) + ': the budget of ' + fmt(build.budget) +
             ' runs out first. Everything below describes a weapon this character cannot hold.'
         });
-      } else if (requirement.unrestricted >= needed) {
+      } else if (requirement.free) {
         notes.push({
-          text: 'The ' + fmt(needed) + ' ' + stat + ' the weapon needs costs this build nothing — ' +
-            goalLabel + ' buys ' + stat + ' up to ' + fmt(requirement.unrestricted) +
-            ' on its own merits anyway.'
+          text: requirement.chosen >= needed
+            ? 'The ' + fmt(needed) + ' ' + stat + ' the weapon needs costs this build nothing — ' +
+              goalLabel + ' buys ' + stat + ' up to ' + fmt(requirement.chosen) +
+              ' on its own merits anyway.'
+            : 'The ' + fmt(needed) + ' ' + stat + ' the weapon needs costs this build nothing. ' +
+              goalLabel + ' has no use for ' + stat + ', but it had points left over it could not ' +
+              'spend on anything better, and the requirement is paid out of those.'
         });
       } else {
         notes.push({
-          text: 'Meeting the requirement raised ' + stat + ' from the ' + fmt(requirement.unrestricted) +
+          text: 'Meeting the requirement raised ' + stat + ' from the ' + fmt(requirement.chosen) +
             ' this goal would have chosen to the ' + fmt(needed) + ' the weapon needs, which costs ' +
-            fmt(rf.costBetween(requirement.unrestricted, needed)) + ' points. Those went to being able ' +
+            fmt(rf.costBetween(requirement.chosen, needed)) + ' points. Those went to being able ' +
             'to hold the weapon rather than to ' + goalLabel + '.'
         });
       }
+    }
+
+    if (build.filled) {
+      var parked = $.map(STAT_ORDER, function (stat) {
+        return build.filled[stat] ? stat + ' +' + fmt(build.filled[stat]) : null;
+      });
+      // The share is worth saying when a goal caps out and strands a third of
+      // the budget; on the last dozen points of a build it is just noise.
+      var share = build.fillCost / build.budget * 100;
+      var shareText = share < 1 ? '' :
+        ' — ' + (share >= 10 ? Math.round(share) : share.toFixed(1)) + '% of the budget —';
+      notes.push({
+        text: fmt(build.fillCost) + ' stat ' + (build.fillCost === 1 ? 'point' : 'points') + shareText +
+          ' could not buy anything ' + goalLabel + ' rewards, so ' +
+          (build.fillCost === 1 ? 'it went' : 'they went') + ' to ' + listPhrase(parked) +
+          '. Spare points go in the order STR, DEX, CON, INT, CHA, SEN, and are only ever spent ' +
+          'once the goal has taken everything it can use.'
+      });
+    }
+
+    if (build.rearranged) {
+      notes.push({
+        text: 'The last point would not fit anywhere — every stat costs at least two to raise once ' +
+          'it is past 10 — so a point already bought was moved to a cheaper stat to make the ' +
+          'remainder land exactly. It is the smallest rearrangement that leaves nothing unspent.'
+      });
     }
 
     if (build.leftover > 0) {
       notes.push({
         warn: true,
         text: fmt(build.leftover) + ' stat ' + (build.leftover === 1 ? 'point' : 'points') +
-          ' cannot be spent: every stat that helps this goal has taken all ' + fmt(cap) +
-          ' points it can hold, or costs more than what is left.'
+          ' cannot be spent: every stat is at ' + fmt(cap) + ' added points, the most it can hold. ' +
+          'Nothing on the sheet can take another point at any price.'
       });
     }
 
@@ -635,11 +681,19 @@
     var requirement = null;
     if (floors) {
       var reqStat = Object.keys(floors)[0];
+      var free = rf.solveGoals(params).build;
+      // What the goal wanted of that stat, leftover parked there excluded:
+      // spare points sitting in STR are not the goal "choosing" STR.
+      var chosen = free.stats[reqStat] - ((free.filled && free.filled[reqStat]) || 0);
       requirement = {
         stat: reqStat,
         needed: floors[reqStat],
         reached: build.stats[reqStat],
-        unrestricted: rf.solveGoals(params).build.stats[reqStat]
+        chosen: chosen,
+        // Whether it cost anything is a question about the goal, not about
+        // the stat: a requirement paid for out of points the goal could not
+        // use costs it nothing, however much it moves the stat.
+        free: build.value >= free.value - 1e-9
       };
     }
 

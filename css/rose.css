@@ -532,7 +532,7 @@ abbr { text-decoration: none; }
 
 .alloc-row {
   display: grid;
-  grid-template-columns: 3.2rem 11.5rem minmax(0, 1fr) 5.4rem;
+  grid-template-columns: 3.2rem 12.5rem minmax(0, 1fr) 5.4rem;
   align-items: center;
   gap: 16px;
   padding: 11px 0;
@@ -546,7 +546,10 @@ abbr { text-decoration: none; }
 }
 .alloc-row.is-untouched .alloc-stat { color: var(--on-void-faint); }
 
-.alloc-values { font-size: var(--t-sm); color: var(--on-void-soft); white-space: nowrap; }
+/* A row can carry the move, a requirement and a cap note at once. Each part
+   holds together, but the cell wraps rather than running into the bar. */
+.alloc-values { font-size: var(--t-sm); color: var(--on-void-soft); }
+.alloc-move, .alloc-req-note, .alloc-cap-note { white-space: nowrap; }
 .alloc-final {
   font-family: var(--display); font-weight: 600; font-size: var(--t-md);
   color: var(--sky);
@@ -567,6 +570,9 @@ abbr { text-decoration: none; }
   transition: width 320ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 .alloc-row.is-capped .alloc-fill { background: var(--sun); }
+/* A stat holding nothing but leftover: real points, just not for this goal. */
+.alloc-row.is-spare .alloc-fill { background: #5c4a94; }
+.alloc-row.is-spare.is-capped .alloc-fill { background: var(--sun); }
 
 .alloc-cost { text-align: right; font-size: var(--t-sm); color: var(--on-void-soft); white-space: nowrap; }
 .alloc-row.is-untouched .alloc-cost { color: var(--on-void-faint); }

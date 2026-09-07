@@ -479,6 +479,163 @@
     return cost ? -value / cost : -Infinity;
   }
 
+  // --------------------------------------------------------------------
+  // Spending what the goal itself will not
+  // --------------------------------------------------------------------
+  //
+  // The greedy loop stops the moment no stat the goal rewards is both under
+  // its ceiling and affordable, and a character should never sit on points
+  // it could have spent. On a capped goal like Max MP that strands
+  // thousands; even on an uncapped one it strands the last few, because the
+  // next point always costs more than the small change left over.
+  //
+  // Two passes clear it. The first parks the leftover in priority order,
+  // preferring stats the goal does not use -- adding to one of those cannot
+  // change what the goal scores. The second deals with the remainder that
+  // no stat can afford: since every cost is floor(S/5), a stat sitting at 15
+  // will not sell you a point for the 1 SP you have left. That one is only
+  // spendable by rearranging what was already bought, which is what
+  // settleExact does.
+
+  /* Order the leftover is parked in: the player's priority, stats the goal
+   * ignores first. */
+  var FILL_PRIORITY = ['STR', 'DEX', 'CON', 'INT', 'CHA', 'SEN'];
+
+  var FILL_RANK = {};
+  FILL_PRIORITY.forEach(function (stat, i) { FILL_RANK[stat] = FILL_PRIORITY.length - i; });
+
+  function fillOrder(coefficients) {
+    var unused = [];
+    var used = [];
+    FILL_PRIORITY.forEach(function (stat) {
+      if (coefficients[stat] > 0) used.push(stat);
+      else unused.push(stat);
+    });
+    return unused.concat(used);
+  }
+
+  function copyStats(stats) {
+    var out = {};
+    STATS.forEach(function (stat) { out[stat] = stats[stat]; });
+    return out;
+  }
+
+  /* How much a build is worth to the goal, and how well it honours the
+   * priority order -- the two things an arrangement is judged on, in that
+   * order. */
+  function arrangementScore(stats, coefficients, floorStats) {
+    var value = 0;
+    var priority = 0;
+    STATS.forEach(function (stat) {
+      value += (coefficients[stat] || 0) * stats[stat];
+      priority += (stats[stat] - floorStats[stat]) * FILL_RANK[stat];
+    });
+    return { value: value, priority: priority };
+  }
+
+  function betterArrangement(a, b) {
+    if (!b) return true;
+    if (a.value > b.value + 1e-12) return true;
+    if (a.value < b.value - 1e-12) return false;
+    return a.priority > b.priority;
+  }
+
+  /* Spend exactly `pool` SP, or report that it cannot be done.
+   *
+   * Every combination has to be considered, not just the greedy one: the
+   * whole point is to land on zero, and the cheapest-first spread that gets
+   * closest is usually not one that lands. So this is exact-change by
+   * dynamic programming over the SP, each stat offering its points at
+   * cumulative cost -- the best arrangement per amount spendable, carried
+   * forward stat by stat. `pool` stays small (a stat point is never worth
+   * more than 88 SP), which is what keeps this cheap enough to run on every
+   * keystroke.
+   *
+   * Returns the highest-value arrangement that spends the pool to the last
+   * point, or null if no combination does. */
+  function spendExactly(stats, pool, coefficients, ceilings, order, floorStats) {
+    if (pool === 0) return copyStats(stats);
+    // best[j] = the best arrangement found so far that spends exactly j.
+    var best = new Array(pool + 1);
+    best[0] = { stats: copyStats(stats), score: arrangementScore(stats, coefficients, floorStats) };
+
+    order.forEach(function (stat) {
+      // The cost of the 1st, 2nd, ... extra point in this stat, cumulative.
+      var steps = [];
+      var value = stats[stat];
+      var running = 0;
+      while (value < ceilings[stat]) {
+        running += statCost(value);
+        if (running > pool) break;
+        value += 1;
+        steps.push(running);
+      }
+      if (!steps.length) return;
+
+      var next = best.slice();
+      for (var spent = 0; spent <= pool; spent++) {
+        var from = best[spent];
+        if (!from) continue;
+        for (var n = 0; n < steps.length; n++) {
+          var total = spent + steps[n];
+          if (total > pool) break;
+          var candidate = copyStats(from.stats);
+          candidate[stat] += n + 1;
+          var score = arrangementScore(candidate, coefficients, floorStats);
+          if (betterArrangement(score, next[total] && next[total].score)) {
+            next[total] = { stats: candidate, score: score };
+          }
+        }
+      }
+      best = next;
+    });
+
+    return best[pool] ? best[pool].stats : null;
+  }
+
+  /* Clear a remainder too small for any stat to sell a point for.
+   *
+   * Hands points back, least useful first, until the pool is large enough
+   * that some exact combination exists, then re-buys the best one. Handing
+   * a point back is what makes the rest spendable: it turns 1 SP nobody
+   * will take into 9 SP that three stats will. The re-buy is free to put
+   * the handed-back point straight back, and usually does.
+   *
+   * Returns the new stats, or null if the remainder is genuinely unspendable
+   * -- which happens for real when every stat is already at its ceiling. */
+  function settleExact(stats, remaining, coefficients, ceilings, order, floorStats) {
+    var working = copyStats(stats);
+    var pool = remaining;
+    var best = null;
+
+    // Hand back from the stat the goal misses least, lowest priority first.
+    var donors = order.slice().reverse().sort(function (a, b) {
+      var va = coefficients[a] || 0, vb = coefficients[b] || 0;
+      if (va !== vb) return va - vb;
+      return FILL_RANK[a] - FILL_RANK[b];
+    });
+
+    for (var handedBack = 0; handedBack <= 12; handedBack++) {
+      if (handedBack > 0) {
+        var donor = null;
+        for (var d = 0; d < donors.length; d++) {
+          if (working[donors[d]] > floorStats[donors[d]]) { donor = donors[d]; break; }
+        }
+        if (!donor) break;                      // nothing left to give back
+        working[donor] -= 1;
+        pool += statCost(working[donor]);
+      }
+      var settled = spendExactly(working, pool, coefficients, ceilings, order, floorStats);
+      if (settled) {
+        var score = arrangementScore(settled, coefficients, floorStats);
+        if (betterArrangement(score, best && best.score)) best = { stats: settled, score: score };
+        break;
+      }
+    }
+
+    return best ? best.stats : null;
+  }
+
   /* Spend `budget` SP to maximise a linear (or tapered-linear) objective.
    *
    * Greedy on value-per-SP. Because cost(S) = floor(S/5) is non-decreasing,
@@ -508,7 +665,8 @@
 
     var result = {
       stats: stats, budget: budget, spent: 0, leftover: 0,
-      floorsCost: 0, value: 0, capped: [], goalScores: null
+      floorsCost: 0, value: 0, capped: [], goalScores: null,
+      filled: null, fillCost: 0, rearranged: false
     };
     var remaining = budget;
 
@@ -535,6 +693,10 @@
         });
     }
 
+    // Nothing may be handed back below this later: the caller's starting
+    // point, raised by whatever the mandatory floors bought.
+    var floorStats = copyStats(stats);
+
     var pending = [];
     STATS.forEach(function (stat) {
       var coefficient = coefficients[stat] || 0;
@@ -556,6 +718,58 @@
       var newValue = marginalValue(stat);
       if (newValue <= 0) continue;      // tapered off; not worth buying now
       pending.push({ key: ratioKey(newValue, statCost(stats[stat])), stat: stat });
+    }
+
+    // Spend what the goal could not, if the caller asked for it. Off by
+    // default so the solo runs that set each goal's maximum stay pure -- a
+    // maximum has to be what the goal alone can reach, not what it reaches
+    // plus loose change.
+    // Spend what the goal would not, if the caller asked for it. Off by
+    // default so the solo runs that set each goal's maximum stay pure -- a
+    // maximum has to be what the goal alone can reach, not what it reaches
+    // plus loose change.
+    if (options.fill) {
+      var order = fillOrder(coefficients);
+      var goalStats = copyStats(stats);
+
+      order.forEach(function (fillStat) {
+        while (stats[fillStat] < ceilings[fillStat]) {
+          var step = statCost(stats[fillStat]);
+          if (step > remaining) break;   // costs only rise; this stat is done
+          stats[fillStat] += 1;
+          remaining -= step;
+        }
+      });
+
+      // Whatever survives that is too small for anyone to sell a point for.
+      if (remaining > 0) {
+        var settled = settleExact(stats, remaining, coefficients, ceilings, order, floorStats);
+        if (settled) {
+          STATS.forEach(function (stat) { stats[stat] = settled[stat]; });
+          result.rearranged = true;
+          remaining = 0;
+        }
+      }
+
+      // What ended up parked, for the UI to explain. Only stats the goal
+      // gets nothing from count: a point added to one of those is spare by
+      // definition, while one added to a stat the goal rewards is just a
+      // point, whichever pass happened to buy it.
+      var filled = {};
+      var fillCost = 0;
+      STATS.forEach(function (stat) {
+        if (!(coefficients[stat] > 0) && stats[stat] > goalStats[stat]) {
+          filled[stat] = stats[stat] - goalStats[stat];
+          fillCost += costBetween(goalStats[stat], stats[stat]);
+        }
+        if (stats[stat] >= ceilings[stat] && result.capped.indexOf(stat) === -1) {
+          result.capped.push(stat);
+        }
+      });
+      if (fillCost > 0) {
+        result.filled = filled;
+        result.fillCost = fillCost;
+      }
     }
 
     result.spent = budget - remaining;
@@ -640,7 +854,12 @@
       };
     }
 
-    var build = optimize(combined, budget, { cap: cap, tapers: tapers, floors: floors });
+    // Spend down to the last point -- but only once there is a goal. With
+    // nothing picked there is no build to round out, and parking 27,500
+    // points in STR would be an answer to a question nobody asked.
+    var build = optimize(combined, budget, {
+      cap: cap, tapers: tapers, floors: floors, fill: names.length > 0
+    });
 
     build.goalScores = goals.map(function (goal) {
       var achieved = linearValue(goal.coefficients, build.stats);
@@ -677,6 +896,7 @@
     cumulativeCost: cumulativeCost,
     costBetween: costBetween,
     STARTING_STAT_POINTS: STARTING_STAT_POINTS,
+    FILL_PRIORITY: FILL_PRIORITY,
     levelupStatPoints: levelupStatPoints,
     totalStatPoints: totalStatPoints,
     maxHp: maxHp,

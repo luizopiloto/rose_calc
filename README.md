@@ -19,6 +19,13 @@ Base status only — no gear, no passives, no buffs.
 - **Weapon status requirements.** A weapon you cannot equip is worth nothing,
   so the stat it demands is bought first. The page says whether that cost you
   anything, and warns when the budget cannot reach it.
+- **Every point gets spent.** The optimizer stops as soon as nothing the goal
+  wants is both under its cap and affordable — on a goal like Max MP that can
+  strand thousands. Whatever is left goes to the stats the goal ignores, in the
+  order STR, DEX, CON, INT, CHA, SEN, and never comes out of the goal. The last
+  point or two usually will not fit anywhere, since nothing costs less than two
+  to raise, so the build rearranges what it already bought to land exactly on
+  zero. Only a character with every stat at its cap sits on unspent points.
 - **Confidence is visible.** Figures never confirmed on the live server carry a
   dotted underline and explain themselves on hover.
 
@@ -71,8 +78,8 @@ servers, so it is left as an open conflict rather than blended in.
 **Not confirmed for this server:** HP and MP by class, and the character
 creation values, which come from older server reconstructions.
 
-The goal weights are priorities, not measurements. Nothing about them comes
-from the game.
+The goal weights, and the order spare points fall in, are priorities rather
+than measurements. Nothing about either comes from the game.
 
 ## Licence
 

@@ -322,23 +322,38 @@ assert(launcher.requires === 'STR', 'the Launcher requirement is on STR');
 var noFloor = rf.solveGoals({
   goalNames: ['Max MP'], weapon: launcher, level: 250, budget: budget250, cap: 425
 });
-assert(noFloor.build.stats.STR === rf.BASE_STATS.STR, 'Max MP buys no STR on its own');
+// Max MP only ever wants INT, and INT reaches its ceiling with thousands to
+// spare. The goal itself buys no STR; every point of STR here is leftover
+// parked by priority, and none of the budget goes unspent.
+assert(noFloor.build.stats.INT === rf.statCeiling('INT', 425), 'Max MP fills INT to its ceiling');
+assert(noFloor.build.stats.STR - noFloor.build.filled.STR === rf.BASE_STATS.STR,
+  'Max MP buys no STR of its own -- what STR it has is parked leftover');
+assert(noFloor.build.leftover === 0 && noFloor.build.spent === budget250,
+  'and the whole budget is spent regardless');
 
 var withFloor = rf.solveGoals({
   goalNames: ['Max MP'], weapon: launcher, level: 250, budget: budget250, cap: 425, floors: strFloor
 });
-assert(withFloor.build.stats.STR === 158, 'the floor puts STR at exactly the requirement');
+assert(withFloor.build.stats.STR - withFloor.build.filled.STR === 158,
+  'the floor puts the goal-driven part of STR at exactly the requirement');
 assert(withFloor.build.floorsCost === rf.costBetween(rf.BASE_STATS.STR, 158),
   'floorsCost is the cost of getting STR from its base to the requirement');
 assert(withFloor.build.floorsCost === 2403, 'reaching 158 STR from 15 costs 2403 points');
 assert(withFloor.build.spent <= budget250, 'the floor does not push the build over budget');
 
-// Max MP caps INT at 425 and still leaves thousands of points unspendable, so
-// here the requirement is paid for out of slack and the goal loses nothing.
+// Max MP caps INT and leaves thousands of points the goal cannot use, so the
+// requirement is paid for out of that slack. It comes out of the same STR the
+// leftover would have been parked in anyway, which is why the two builds come
+// out identical rather than merely close: 2403 points that were spare either
+// way, spent on the same stat either way.
 assert(withFloor.build.stats.INT === noFloor.build.stats.INT,
   'with budget to spare, the requirement costs the goal nothing');
-assert(withFloor.build.leftover === noFloor.build.leftover - 2403,
-  'it comes out of the unspent remainder instead');
+rf.STATS.forEach(function (stat) {
+  assert(withFloor.build.stats[stat] === noFloor.build.stats[stat],
+    'and the build is unchanged down to ' + stat);
+});
+assert(noFloor.build.filled.STR - withFloor.build.filled.STR === 158 - rf.BASE_STATS.STR,
+  'the floor simply bought STR the leftover would have bought anyway');
 
 // When the goal can absorb the whole budget, it does cost. Gun Attack Power
 // (CON/DEX/SEN) has no use for STR at all, so a STR requirement is pure loss.
@@ -366,6 +381,14 @@ var overCap = rf.solveGoals({
 });
 assert(overCap.build.stats.STR === 215, 'a floor above the ceiling stops at 15 + 200');
 assert(overCap.build.stats.STR === rf.statCeiling('STR', 200), 'which is exactly the ceiling');
+
+// A cap that low against a level 250 budget is the one case where points
+// really cannot all be spent: every stat is at its ceiling, so there is
+// nothing left to buy at any price.
+rf.STATS.forEach(function (stat) {
+  assert(overCap.build.stats[stat] === rf.statCeiling(stat, 200), stat + ' is at its ceiling too');
+});
+assert(overCap.build.leftover > 0, 'and only then does the build sit on unspent points');
 
 // An unaffordable floor fills as far as the budget allows and stops, rather
 // than overspending -- the UI reports this as a build that cannot equip.
@@ -405,5 +428,86 @@ rf.OBJECTIVES.forEach(function (objective) {
     });
   });
 });
+
+// -- Every point gets spent ------------------------------------------------
+
+// The priority order the leftover follows, and the promise that it goes to
+// stats the goal has no use for before any it does.
+assert(rf.FILL_PRIORITY.join(' > ') === 'STR > DEX > CON > INT > CHA > SEN',
+  'leftover priority is STR > DEX > CON > INT > CHA > SEN');
+
+var apGun = rf.solveGoals({
+  goalNames: ['Attack Power'], weapon: gun, level: 250, budget: budget250, cap: 425
+});
+assert(apGun.build.leftover === 0, 'a level 250 Gun build spends every point');
+assert(apGun.build.spent === budget250, 'which is the whole budget');
+// Gun Attack Power runs on CON/DEX/SEN, so the spare goes to STR -- first in
+// the priority order among the stats it cannot use.
+assert(Object.keys(apGun.build.filled).join(',') === 'STR', 'the spare goes to STR');
+assert(rf.attackPower(apGun.build.stats, gun) === rf.attackPower(
+  rf.optimize(apGun.coefficients, budget250, { cap: 425 }).stats, gun),
+  'and parking it costs the goal nothing');
+
+// Nothing is parked before the goal has finished buying: the fill only ever
+// gets what the goal could not spend.
+assert(apGun.build.stats.CON > 400 && apGun.build.stats.DEX > 300,
+  'the goal still gets its points first');
+
+// Under a goal that caps out early the leftover is enormous, and it still all
+// goes somewhere.
+var maxMp = rf.solveGoals({
+  goalNames: ['Max MP'], weapon: gun, level: 250, budget: budget250, cap: 425
+});
+assert(maxMp.build.leftover === 0, 'even 9000-odd stranded points find a home');
+assert(maxMp.build.filled.STR > maxMp.build.filled.DEX, 'STR fills before DEX');
+assert(maxMp.build.stats.CHA === rf.BASE_STATS.CHA, 'and the low-priority stats are never reached');
+
+// The remainder the priority fill cannot place -- 1 SP when the cheapest
+// point on the sheet costs 2 -- is cleared by rearranging what was already
+// bought. A level 1 character has 10 points and no stat that divides them.
+var level1 = rf.solveGoals({
+  goalNames: ['Attack Power'], weapon: rf.WEAPONS_BY_NAME.Unarmed, level: 1,
+  budget: rf.totalStatPoints(1), cap: 425
+});
+assert(level1.build.leftover === 0, 'a level 1 character spends all ten points');
+assert(level1.build.rearranged, 'and says so, because it took a rearrangement');
+assert(level1.build.spent === 10, 'ten points in, ten points spent');
+
+// Turning the fill off leaves the optimizer exactly as it was.
+var unfilled = rf.optimize(rf.objectiveCoefficients('Attack Power', gun), budget250, { cap: 425 });
+assert(unfilled.leftover === 12, 'without the fill the last 12 points strand');
+assert(unfilled.filled === null && unfilled.rearranged === false, 'and nothing is parked or moved');
+
+// The sweep: across every goal, weapon, level and cap, a build spends the lot
+// unless every single stat is at its ceiling -- the one case where there is
+// genuinely nothing left to buy.
+var sweepConfigs = 0, sweepStranded = 0, sweepMaxed = 0;
+rf.OBJECTIVES.forEach(function (objective) {
+  rf.WEAPONS.forEach(function (weapon) {
+    [1, 12, 77, 180, 250].forEach(function (level) {
+      [50, 255, 425, 500].forEach(function (cap) {
+        var budget = rf.totalStatPoints(level);
+        var solved = rf.solveGoals({
+          goalNames: [objective.name], weapon: weapon, level: level, budget: budget, cap: cap
+        });
+        sweepConfigs++;
+        var room = rf.STATS.some(function (stat) {
+          return solved.build.stats[stat] < rf.statCeiling(stat, cap);
+        });
+        if (!room) { sweepMaxed++; return; }
+        if (solved.build.leftover !== 0) {
+          sweepStranded++;
+          console.log('  stranded: ' + [objective.name, weapon.name, level, cap,
+            solved.build.leftover].join(' / '));
+        }
+        assert(solved.build.spent === budget,
+          objective.name + '/' + weapon.name + '/L' + level + '/cap' + cap + ' spends every point');
+      });
+    });
+  });
+});
+assert(sweepStranded === 0, 'no build anywhere sits on points it could spend');
+console.log('\nSpend-everything sweep: ' + sweepConfigs + ' builds, ' + sweepStranded +
+  ' stranded, ' + sweepMaxed + ' with every stat already at its ceiling.');
 
 console.log('\nAll ' + checks + ' self-checks passed.');
