@@ -196,7 +196,7 @@
   // anything its job allows; this is the one it is known for. Reported by
   // the user from the live server, the same standing as `requires` above.
   var SIGNATURE_WEAPONS = {
-    Visitor: 'none',
+    Visitor: 'melee',      // a Visitor swings the starter sword, not fists
     Soldier: 'melee',
     Knight: 'crossbow',
     Champion: 'melee',          // the melee entry is the one listing Spear
