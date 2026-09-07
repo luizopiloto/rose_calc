@@ -203,7 +203,7 @@
     Muse: 'staff',
     Mage: 'staff',
     Cleric: 'wand',
-    Hawker: 'dualwield',
+    Hawker: 'katar',
     Raider: 'katar',
     Scout: 'bow',
     Dealer: 'gun',

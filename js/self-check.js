@@ -60,8 +60,9 @@ assert(rf.maxMp(artisan, 250, 25) === 1225, 'maxMp(Artisan, 250, 25) === 1225');
 // the weapon box on whatever the last class chose.
 var signatures = {
   Artisan: 'Gun', Bourgeois: 'Launcher', Cleric: 'Wand', Mage: 'Staff',
-  Raider: 'Katar', Knight: 'Crossbow (Bowgun)', Scout: 'Bow',
-  Champion: '1H Sword/Blunt, Great Sword, Spear, Axe'
+  Raider: 'Katar', Hawker: 'Katar', Knight: 'Crossbow (Bowgun)', Scout: 'Bow',
+  Champion: '1H Sword/Blunt, Great Sword, Spear, Axe',
+  Visitor: '1H Sword/Blunt, Great Sword, Spear, Axe'
 };
 rf.JOBS.forEach(function (j) {
   var weapon = rf.signatureWeapon(j);
