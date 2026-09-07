@@ -303,8 +303,8 @@
     $('#ledgerTotal').text(fmt(build.budget));
     $('#ledgerTotalLabel').text(
       build.budget === earned
-        ? 'stat points earned by level ' + level
-        : 'stat points, set by hand — a level ' + level + ' character earns ' + fmt(earned)
+        ? 'stat points a level ' + level + ' has to spend'
+        : 'stat points, set by hand — a level ' + level + ' character has ' + fmt(earned)
     );
     $('#ledgerBarFill').css('width', spentShare + '%');
     $('#ledgerSpent').text(fmt(build.spent));
@@ -559,9 +559,9 @@
     notes.push({
       text: 'Raising a stat by one point costs its current value divided by five, rounded down, so the ' +
         '400th point in a stat costs 80 and the 15th costs 3. ' +
-        'That formula comes from classic server code, but the total it produces ' +
-        'at level 130 — ' + fmt(rf.totalStatPoints(130)) + ' — matches what a player reported on the ' +
-        'official forum exactly.'
+        'That formula comes from classic server code, but the budget it has to work against is the ' +
+        'live one: a character starts with ' + fmt(rf.STARTING_STAT_POINTS) + ' points in hand and ' +
+        'earns the rest by levelling, which puts a level 250 on ' + fmt(rf.totalStatPoints(250)) + '.'
     });
 
     $('#notes').html($.map(notes, function (note) {

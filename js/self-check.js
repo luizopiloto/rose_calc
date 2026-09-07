@@ -35,9 +35,17 @@ assert(rf.statCost(10) === 2, 'statCost(10) === 2');
 assert(rf.statCost(139) === 27, 'statCost(139) === 27');
 assert(rf.cumulativeCost(15) === 15, 'cumulativeCost(15) === 15');
 assert(rf.costBetween(15, 425) === 17835, 'costBetween(15, 425) === 17835');
-assert(rf.totalStatPoints(250) === 27490, 'totalStatPoints(250) === 27490');
-assert(rf.totalStatPoints(130) === 8050, 'totalStatPoints(130) === 8050  [piNo, topic 2434]');
+assert(rf.totalStatPoints(250) === 27500, 'totalStatPoints(250) === 27500  [live server]');
 assert(rf.levelupStatPoints(2) === 11, 'levelupStatPoints(2) === 11');
+assert(rf.STARTING_STAT_POINTS === 10, 'a character starts with 10 points in hand');
+assert(rf.totalStatPoints(1) === rf.STARTING_STAT_POINTS, 'level 1 has only the starting pool');
+
+// The level-up grants on their own -- the starting pool left out -- come to
+// 8050 by level 130, which is the total a player reported (topic 2434). The
+// same ten points are what separate 27490 from the 27500 the game shows at
+// 250, so both live-server numbers hold at once.
+var levelled130 = rf.totalStatPoints(130) - rf.STARTING_STAT_POINTS;
+assert(levelled130 === 8050, 'level-up grants total 8050 by level 130  [piNo, topic 2434]');
 
 // -- HP / MP ---------------------------------------------------------------
 

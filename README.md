@@ -54,8 +54,9 @@ Not all of them are equally trustworthy, and the page says which is which.
 **Measured on the live server** (official forum, player-measured, GM-pinned):
 Attack Power per weapon type, Physical and Magic Defence, Accuracy, Dodge,
 Critical and Critical Defence. Also the 425 cap and the level 250 ceiling,
-confirmed by a GM, and SP-per-level, which matches a player's reported total at
-level 130 exactly.
+confirmed by a GM, and the 27,500 points a level 250 has to spend — ten in hand
+at creation and the rest from levelling, whose grants on their own match a
+player's reported total at level 130 exactly.
 
 **Field-tested, never written down:** DoT damage — a point of CHA and a point of
 Attack Power each give one. Weapon requirements sit on STR for Launcher, melee

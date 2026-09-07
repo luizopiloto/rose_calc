@@ -20,8 +20,11 @@
  *   2. topic 979: stat cap 425, max level 250, confirmed by a GM and a
  *      Grandmaster player.
  *   3. topic 2434: a player reports 8050 total stat points at level 130 --
- *      matches totalStatPoints(130) exactly, which is what keeps the
- *      SP-per-level and progressive-cost formulas in play.
+ *      exactly what the level-up grants add up to by then, which is what
+ *      keeps the SP-per-level and progressive-cost formulas in play. The
+ *      pool the game hands you also carries the ten points a character
+ *      starts with, and that is what puts level 250 at 27,500 rather than
+ *      27,490.
  *   4. rose-offline / osirose (classic server reconstructions). Used ONLY
  *      where (1)-(3) are silent: SP-per-level, the floor(S/5) cost, and
  *      HP/MP-by-class -- the last of which is a placeholder, not a
@@ -98,12 +101,18 @@
     return Math.trunc(level * 0.8) + 10;
   }
 
-  /* Total SP a character has earned by `level`, spent or not. Level 1
-   * grants nothing. totalStatPoints(130) === 8050 matches a live player's
-   * reported total exactly (topic 2434) -- the one piece of this module
-   * confirmed on the actual current server. */
+  /* Points a character holds at level 1, before any level-up grant. This is
+   * what reconciles the two live-server numbers: the level-up grants alone
+   * add up to 8,050 by level 130, exactly the total a player reported
+   * (topic 2434), and adding these ten lands level 250 on the 27,500 the
+   * game shows -- which the user read straight off the live server. */
+  var STARTING_STAT_POINTS = 10;
+
+  /* Total SP a character has to spend at `level`, spent or not: the ten it
+   * starts with plus every level-up grant since. Level 1 grants nothing on
+   * top of the starting pool. */
   function totalStatPoints(level) {
-    var total = 0;
+    var total = STARTING_STAT_POINTS;
     for (var lv = 2; lv <= level; lv++) total += levelupStatPoints(lv);
     return total;
   }
@@ -667,6 +676,7 @@
     statCost: statCost,
     cumulativeCost: cumulativeCost,
     costBetween: costBetween,
+    STARTING_STAT_POINTS: STARTING_STAT_POINTS,
     levelupStatPoints: levelupStatPoints,
     totalStatPoints: totalStatPoints,
     maxHp: maxHp,
